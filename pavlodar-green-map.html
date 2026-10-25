@@ -1,0 +1,767 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Зелёная карта Павлодара</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+  /* Layout: full-bleed map, floating top bar, collapsible bottom sheet */
+  :root{
+    --bg:#f4f6f3; --surface:#ffffff; --fg:#1b2420; --muted:#657068;
+    --line:#dfe5df; --accent:#2f7d4f; --accent-soft:#e6f1e9;
+    --warn:#c98a16; --crit:#c0392b; --ok:#2f7d4f;
+    --shadow:0 2px 14px rgba(20,40,28,.14);
+    color-scheme:light;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#121714; --surface:#1b211d; --fg:#e8eee9; --muted:#9aa89f;
+      --line:#2b332d; --accent:#6fc08b; --accent-soft:#223129;
+      --warn:#e0a93c; --crit:#e07a6d;
+      --shadow:0 2px 16px rgba(0,0,0,.55);
+      color-scheme:dark;
+    }
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{
+    background:var(--bg); color:var(--fg);
+    font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    overflow:hidden;
+  }
+  #map{position:absolute;inset:0;background:var(--bg)}
+
+  .bar{
+    position:absolute;z-index:500;
+    top:calc(8px + env(safe-area-inset-top,0px));
+    left:max(8px,env(safe-area-inset-left,0px));
+    right:max(8px,env(safe-area-inset-right,0px));
+    display:flex;gap:7px;flex-wrap:wrap;align-items:flex-start;
+  }
+  .btn{
+    appearance:none;border:1px solid var(--line);background:var(--surface);color:var(--fg);
+    border-radius:10px;padding:9px 12px;font-size:14px;font-weight:600;cursor:pointer;
+    box-shadow:var(--shadow);line-height:1;
+  }
+  .btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  .btn.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+  .btn[disabled]{opacity:.55;cursor:default}
+  .group{display:flex;background:var(--surface);border:1px solid var(--line);border-radius:10px;
+    box-shadow:var(--shadow);overflow:hidden}
+  .group button{
+    appearance:none;border:0;background:transparent;color:var(--muted);
+    padding:9px 11px;font-size:13.5px;font-weight:600;cursor:pointer;line-height:1;
+  }
+  .group button+button{border-left:1px solid var(--line)}
+  .group button[aria-pressed=true]{background:var(--accent-soft);color:var(--accent)}
+
+  .sheet{
+    position:absolute;z-index:500;
+    left:max(8px,env(safe-area-inset-left,0px));
+    right:max(8px,env(safe-area-inset-right,0px));
+    bottom:calc(8px + env(safe-area-inset-bottom,0px));
+    background:var(--surface);border:1px solid var(--line);border-radius:14px;
+    box-shadow:var(--shadow);max-height:60vh;display:flex;flex-direction:column;
+  }
+  .sheet-head{display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;
+    border-bottom:1px solid var(--line)}
+  .sheet-head h1{font-size:15px;margin:0;font-weight:700;flex:1;min-width:0}
+  .chev{color:var(--muted);font-size:13px;transition:transform .2s}
+  .sheet.collapsed .chev{transform:rotate(180deg)}
+  .sheet.collapsed .sheet-body{display:none}
+  .sheet.collapsed .sheet-head{border-bottom:none}
+  .sheet-body{overflow-y:auto;padding:12px 14px 14px}
+
+  .tabs{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
+  .tab{border:1px solid var(--line);background:transparent;color:var(--muted);
+    border-radius:999px;padding:5px 11px;font-size:13px;font-weight:600;cursor:pointer}
+  .tab.active{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:8px;margin-bottom:12px}
+  .stat{border:1px solid var(--line);border-radius:10px;padding:9px 11px}
+  .stat b{display:block;font-size:19px;font-variant-numeric:tabular-nums;letter-spacing:-.3px}
+  .stat span{color:var(--muted);font-size:11.5px;text-transform:uppercase;letter-spacing:.5px}
+
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  th,td{text-align:left;padding:6px 4px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-weight:600;font-size:11.5px;text-transform:uppercase;letter-spacing:.5px}
+  td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .swatch{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:7px}
+
+  p.note{color:var(--muted);font-size:13px;margin:10px 0 0}
+  .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+  .progress{height:4px;border-radius:2px;background:var(--line);overflow:hidden;margin-top:10px}
+  .progress i{display:block;height:100%;background:var(--accent);width:0;transition:width .25s}
+
+  dialog{border:1px solid var(--line);border-radius:14px;background:var(--surface);color:var(--fg);
+    padding:0;width:min(420px,calc(100vw - 32px));box-shadow:var(--shadow)}
+  dialog::backdrop{background:rgba(10,18,14,.45)}
+  .dlg-body{padding:16px}
+  .dlg-body h2{margin:0 0 4px;font-size:17px}
+  .dlg-body .coords{color:var(--muted);font-size:12.5px;font-variant-numeric:tabular-nums;margin:0 0 6px}
+  label{display:block;font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.5px;margin:12px 0 5px}
+  select,input[type=text]{width:100%;padding:10px;border:1px solid var(--line);border-radius:9px;
+    background:var(--bg);color:var(--fg);font:inherit;font-size:15px}
+  .seg{display:flex;gap:6px}
+  .seg button{flex:1;border:1px solid var(--line);background:var(--bg);color:var(--fg);
+    border-radius:9px;padding:10px 4px;font-size:13px;font-weight:600;cursor:pointer}
+  .seg button[aria-pressed=true]{box-shadow:inset 0 0 0 2px currentColor}
+  .seg button[data-v=ok][aria-pressed=true]{color:var(--ok)}
+  .seg button[data-v=care][aria-pressed=true]{color:var(--warn)}
+  .seg button[data-v=bad][aria-pressed=true]{color:var(--crit)}
+
+  .toast{position:absolute;z-index:900;left:50%;transform:translateX(-50%);
+    bottom:calc(76px + env(safe-area-inset-bottom,0px));
+    background:var(--fg);color:var(--bg);padding:9px 15px;border-radius:999px;
+    font-size:13.5px;font-weight:600;box-shadow:var(--shadow);max-width:86vw;text-align:center}
+  .leaflet-container{background:var(--bg)}
+  .leaflet-popup-content{font:inherit;font-size:13.5px;margin:11px 13px}
+  .leaflet-popup-content b{display:block;margin-bottom:2px}
+</style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<div class="bar">
+  <button class="btn primary" id="load">Загрузить данные</button>
+  <div class="group" id="baseGroup">
+    <button data-base="osm" aria-pressed="true">Карта</button>
+    <button data-base="sat" aria-pressed="false">Спутник</button>
+  </div>
+  <div class="group" id="layerGroup">
+    <button data-layer="green" aria-pressed="true">Зелень</button>
+    <button data-layer="grid" aria-pressed="true">Дефицит</button>
+  </div>
+  <button class="btn" id="addmode">+ Дерево</button>
+  <button class="btn" id="locate" title="Моё местоположение">◎</button>
+</div>
+
+<section class="sheet" id="sheet">
+  <div class="sheet-head" id="sheetHead">
+    <h1 id="sheetTitle">Зелёная карта Павлодара</h1>
+    <span class="chev">▾</span>
+  </div>
+  <div class="sheet-body">
+    <div class="tabs">
+      <button class="tab active" data-tab="green">Зелень</button>
+      <button class="tab" data-tab="deficit">Дефицит</button>
+      <button class="tab" data-tab="mine">Мои деревья</button>
+      <button class="tab" data-tab="species">Породы</button>
+    </div>
+
+    <div id="tab-green">
+      <div class="stats" id="stats">
+        <div class="stat"><b>—</b><span>зелёных зон</span></div>
+        <div class="stat"><b>—</b><span>гектаров</span></div>
+        <div class="stat"><b>—</b><span>деревьев точками</span></div>
+        <div class="stat"><b>—</b><span>аллей линиями</span></div>
+      </div>
+      <table id="breakdown"><tbody>
+        <tr><td style="color:var(--muted);border:none;padding:4px">
+          Нажмите «Загрузить данные» — запрос уйдёт по видимой области карты.
+          Для начала хватит одного района: чем меньше окно, тем быстрее ответ.
+        </td></tr>
+      </tbody></table>
+      <div class="progress" id="prog" hidden><i></i></div>
+      <p class="note" id="osmnote"></p>
+    </div>
+
+    <div id="tab-deficit" hidden>
+      <div class="stats" id="defstats">
+        <div class="stat"><b>—</b><span>ячеек обжитых</span></div>
+        <div class="stat"><b>—</b><span>с дефицитом</span></div>
+        <div class="stat"><b>—</b><span>острый дефицит</span></div>
+        <div class="stat"><b>—</b><span>% зелени средн.</span></div>
+      </div>
+      <table><thead><tr><th>Приоритет</th><th class="num">Ячеек</th><th class="num">Га</th></tr></thead>
+        <tbody id="deflist"><tr><td colspan="3" style="color:var(--muted);border:none">
+          Появится после загрузки данных.</td></tr></tbody></table>
+      <p class="note">Город режется на квадраты по 250–500 м. Для каждого считается доля зелени и признак
+        застройки. Приоритет = насколько обжито × насколько не хватает зелени. Это упрощённый аналог
+        Tree&nbsp;Equity&nbsp;Score — без доходов и температуры, только геометрия.</p>
+    </div>
+
+    <div id="tab-mine" hidden>
+      <div class="stats" id="mystats">
+        <div class="stat"><b>0</b><span>всего</span></div>
+        <div class="stat"><b>0</b><span>норм</span></div>
+        <div class="stat"><b>0</b><span>нужен уход</span></div>
+        <div class="stat"><b>0</b><span>аварийные</span></div>
+      </div>
+      <table><thead><tr><th>Порода</th><th>Состояние</th><th class="num">Когда</th></tr></thead>
+        <tbody id="mylist"></tbody></table>
+      <div class="row">
+        <button class="btn" id="exportGeo">GeoJSON</button>
+        <button class="btn" id="exportCsv">CSV</button>
+        <button class="btn" id="clearMine">Очистить</button>
+      </div>
+      <p class="note">Записи живут только в этом браузере. На хакатоне их место — в общей базе.</p>
+    </div>
+
+    <div id="tab-species" hidden>
+      <table><thead><tr><th>Порода</th><th>Для Павлодара</th></tr></thead>
+        <tbody id="speclist"></tbody></table>
+      <p class="note">Черновик на 10 самых частых пород. Перед питчем проверьте у местного питомника.</p>
+    </div>
+  </div>
+</section>
+
+<dialog id="dlg">
+  <form method="dialog" class="dlg-body">
+    <h2>Новое дерево</h2>
+    <p class="coords" id="dlgCoords"></p>
+    <label for="sp">Порода</label>
+    <select id="sp"></select>
+    <label for="stateSeg">Состояние</label>
+    <div class="seg" id="stateSeg">
+      <button type="button" data-v="ok" aria-pressed="true">🟢 Норм</button>
+      <button type="button" data-v="care" aria-pressed="false">🟡 Уход</button>
+      <button type="button" data-v="bad" aria-pressed="false">🔴 Авария</button>
+    </div>
+    <label for="note">Заметка</label>
+    <input type="text" id="note" placeholder="Напр.: верёвка на стволе, асфальт вплотную">
+    <div class="row">
+      <button class="btn primary" value="save">Сохранить</button>
+      <button class="btn" value="cancel">Отмена</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+(function(){
+'use strict';
+
+/* ================= Справочник пород (черновик, север Казахстана) ================= */
+var SPECIES = [
+  ['Карагач (вяз мелколистный)','Рабочая лошадка: засухо- и солеустойчив, быстро растёт. Минус — ломкие ветви и обильный самосев.'],
+  ['Тополь (бальзамический, чёрный)','Много тени очень быстро. Минусы: пух, ломкость, с возрастом аварийность.'],
+  ['Берёза повислая','Красива, но влаголюбива. В заасфальтированном дворе страдает и рано слабеет.'],
+  ['Клён ясенелистный (американский)','Сорный инвазивный вид, сильный аллерген. Сажать не стоит, лучше замещать.'],
+  ['Лох серебристый (джида)','Один из самых устойчивых: засуха, засоление, ветер. Хорош для промзон и обочин.'],
+  ['Яблоня сибирская (ранетка)','Декоративна, зимостойка, компактна. Хороша во дворах и у школ.'],
+  ['Сосна обыкновенная','Вечнозелёная, своя для региона. Плохо переносит реагенты и уплотнение почвы.'],
+  ['Ель колючая (голубая)','Парадная посадка, устойчива к городу. Дорогой саженец, медленный рост.'],
+  ['Ясень пенсильванский','Вынослив, частый в ветрозащитных полосах. Даёт самосев.'],
+  ['Рябина обыкновенная','Небольшая, декоративная круглый год. Для дворов и узких мест.'],
+  ['Другое / не знаю','Отметить и уточнить позже.']
+];
+
+/* ================= Карта и слои ================= */
+var PAVLODAR = [52.2873, 76.9674];
+var map = L.map('map', {zoomControl:false}).setView(PAVLODAR, 14);
+L.control.zoom({position:'topright'}).addTo(map);
+
+var bases = {
+  osm: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+        {maxZoom:19, attribution:'© OpenStreetMap'}),
+  sat: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+        {maxZoom:19, attribution:'Esri, Maxar, Earthstar Geographics'})
+};
+bases.osm.addTo(map);
+var currentBase = 'osm';
+
+var greenLayer = L.layerGroup().addTo(map);
+var gridLayer  = L.layerGroup().addTo(map);
+var mineLayer  = L.layerGroup().addTo(map);
+
+/* ================= Что тянем из OSM ================= */
+var GREEN_Q = [
+  '["leisure"~"^(park|garden)$"]',
+  '["landuse"~"^(forest|grass|meadow|village_green|cemetery|allotments|orchard|recreation_ground)$"]',
+  '["natural"~"^(wood|grassland|scrub)$"]'
+];
+var BUILT_Q = ['["landuse"~"^(residential|commercial|retail|industrial|construction|school|education)$"]'];
+
+function kindOf(t){
+  if(!t) return null;
+  if(t.leisure === 'park' || t.leisure === 'garden') return 'park';
+  if(t.landuse === 'forest' || t.natural === 'wood') return 'wood';
+  if(t.landuse === 'grass' || t.landuse === 'meadow' || t.landuse === 'village_green' ||
+     t.landuse === 'recreation_ground' || t.natural === 'grassland' || t.natural === 'scrub') return 'grass';
+  if(t.landuse === 'cemetery') return 'cemetery';
+  if(t.landuse === 'allotments' || t.landuse === 'orchard') return 'garden';
+  return null;
+}
+var GROUPS = [
+  {key:'park',     name:'Парки и скверы', color:'#2f9e5e'},
+  {key:'wood',     name:'Лес и посадки',  color:'#1d6b3f'},
+  {key:'grass',    name:'Газоны и луга',  color:'#8cc46a'},
+  {key:'cemetery', name:'Кладбища',       color:'#6e8f74'},
+  {key:'garden',   name:'Сады и дачи',    color:'#a8c66c'}
+];
+function colorOf(k){
+  for(var i=0;i<GROUPS.length;i++) if(GROUPS[i].key === k) return GROUPS[i].color;
+  return '#2f9e5e';
+}
+
+function buildQuery(b){
+  var bb = b.getSouth().toFixed(5)+','+b.getWest().toFixed(5)+','+
+           b.getNorth().toFixed(5)+','+b.getEast().toFixed(5);
+  var p = [];
+  GREEN_Q.concat(BUILT_Q).forEach(function(q){
+    p.push('way'+q+'('+bb+');');
+    p.push('relation'+q+'('+bb+');');
+  });
+  p.push('node["natural"="tree"]('+bb+');');
+  p.push('way["natural"="tree_row"]('+bb+');');
+  p.push('way["highway"~"^(residential|living_street|unclassified|tertiary|secondary|primary)$"]('+bb+');');
+  return '[out:json][timeout:120];('+p.join('')+');out geom;';
+}
+
+var ENDPOINTS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+  'https://overpass.private.coffee/api/interpreter'
+];
+function fetchOverpass(query){
+  var i = 0;
+  function attempt(){
+    return fetch(ENDPOINTS[i], {method:'POST', body:'data='+encodeURIComponent(query),
+      headers:{'Content-Type':'application/x-www-form-urlencoded'}})
+      .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+      .catch(function(e){ i++; if(i < ENDPOINTS.length) return attempt(); throw e; });
+  }
+  return attempt();
+}
+
+/* ================= Геометрия ================= */
+var RAD = Math.PI/180, R = 6378137;
+function ringArea(pts){
+  if(!pts || pts.length < 3) return 0;
+  var t = 0;
+  for(var i=0;i<pts.length;i++){
+    var a = pts[i], b = pts[(i+1)%pts.length];
+    t += (b.lon - a.lon)*RAD * (2 + Math.sin(a.lat*RAD) + Math.sin(b.lat*RAD));
+  }
+  return Math.abs(t*R*R/2);
+}
+function bboxOf(pts){
+  var s=90,w=180,n=-90,e=-180;
+  for(var i=0;i<pts.length;i++){
+    var p = pts[i];
+    if(p.lat<s)s=p.lat; if(p.lat>n)n=p.lat;
+    if(p.lon<w)w=p.lon; if(p.lon>e)e=p.lon;
+  }
+  return {s:s,w:w,n:n,e:e};
+}
+function inRing(lat, lon, pts){
+  var inside = false;
+  for(var i=0, j=pts.length-1; i<pts.length; j=i++){
+    var yi = pts[i].lat, xi = pts[i].lon, yj = pts[j].lat, xj = pts[j].lon;
+    if(((yi > lat) !== (yj > lat)) && (lon < (xj - xi) * (lat - yi) / (yj - yi) + xi)) inside = !inside;
+  }
+  return inside;
+}
+function ringsOf(el){
+  if(el.type === 'way' && el.geometry && el.geometry.length > 2) return [el.geometry];
+  if(el.type === 'relation' && el.members){
+    var out = [];
+    el.members.forEach(function(m){
+      if(m.role !== 'inner' && m.geometry && m.geometry.length > 2) out.push(m.geometry);
+    });
+    return out;
+  }
+  return [];
+}
+
+/* ================= Загрузка и отрисовка ================= */
+var loadBtn = document.getElementById('load');
+var lastData = null;
+
+function loadData(){
+  loadBtn.disabled = true;
+  loadBtn.textContent = 'Загружаю…';
+  setProgress(15);
+  fetchOverpass(buildQuery(map.getBounds())).then(function(d){
+    setProgress(60);
+    lastData = d.elements || [];
+    renderGreen(lastData);
+    setProgress(80);
+    renderGrid(lastData);
+    setProgress(100);
+    setTimeout(function(){ setProgress(-1); }, 400);
+    loadBtn.disabled = false;
+    loadBtn.textContent = 'Обновить по окну';
+  }).catch(function(err){
+    setProgress(-1);
+    loadBtn.disabled = false;
+    loadBtn.textContent = 'Загрузить данные';
+    document.getElementById('osmnote').textContent =
+      'Не удалось получить данные: ' + err.message +
+      '. Серверы Overpass бывают перегружены — подождите минуту и попробуйте снова, или уменьшите окно карты.';
+    toast('Ошибка загрузки');
+  });
+}
+function setProgress(v){
+  var p = document.getElementById('prog');
+  if(v < 0){ p.hidden = true; return; }
+  p.hidden = false;
+  p.firstElementChild.style.width = v + '%';
+}
+
+function renderGreen(els){
+  greenLayer.clearLayers();
+  var area = {}, count = {}, trees = 0, rows = 0, named = [];
+
+  els.forEach(function(el){
+    if(el.type === 'node' && el.tags && el.tags.natural === 'tree'){
+      trees++;
+      L.circleMarker([el.lat, el.lon], {radius:3, weight:1, color:'#14532d',
+        fillColor:'#4ade80', fillOpacity:.95})
+        .bindPopup('<b>Дерево в OSM</b>' + (el.tags.species || 'порода не указана'))
+        .addTo(greenLayer);
+      return;
+    }
+    if(el.tags && el.tags.natural === 'tree_row' && el.geometry){
+      rows++;
+      L.polyline(el.geometry.map(function(p){return [p.lat,p.lon];}),
+        {color:'#2f9e5e', weight:3, opacity:.85}).addTo(greenLayer);
+      return;
+    }
+    var k = kindOf(el.tags);
+    if(!k) return;
+    var rings = ringsOf(el);
+    if(!rings.length) return;
+
+    count[k] = (count[k]||0) + 1;
+    var a = 0;
+    rings.forEach(function(r){ a += ringArea(r); });
+    area[k] = (area[k]||0) + a;
+
+    var name = (el.tags.name || '').trim();
+    if(name && a > 2000) named.push({name:name, ha:a/10000});
+
+    rings.forEach(function(r){
+      L.polygon(r.map(function(p){return [p.lat,p.lon];}), {
+        color:colorOf(k), weight:1, fillColor:colorOf(k), fillOpacity:.35
+      }).bindPopup('<b>'+escapeHtml(name || 'Без названия')+'</b>'+
+          (Math.round(a/100)/100)+' га').addTo(greenLayer);
+    });
+  });
+
+  var tc = 0, ta = 0;
+  Object.keys(count).forEach(function(k){ tc += count[k]; });
+  Object.keys(area).forEach(function(k){ ta += area[k]; });
+
+  setStats('stats', [
+    [tc, 'зелёных зон'],
+    [(ta/10000).toFixed(ta > 3e6 ? 0 : 1), 'гектаров'],
+    [trees, 'деревьев точками'],
+    [rows, 'аллей линиями']
+  ]);
+
+  var tb = document.querySelector('#breakdown tbody');
+  tb.innerHTML = '<tr><th>Тип</th><th class="num">Шт.</th><th class="num">Га</th></tr>';
+  GROUPS.forEach(function(g){
+    if(!count[g.key]) return;
+    var tr = document.createElement('tr');
+    tr.innerHTML = '<td><span class="swatch" style="background:'+g.color+'"></span>'+g.name+'</td>'+
+      '<td class="num">'+count[g.key]+'</td><td class="num">'+(area[g.key]/10000).toFixed(1)+'</td>';
+    tb.appendChild(tr);
+  });
+  named.sort(function(a,b){ return b.ha - a.ha; });
+  if(named.length){
+    var h = document.createElement('tr');
+    h.innerHTML = '<th colspan="2">Крупнейшие именованные</th><th class="num">Га</th>';
+    tb.appendChild(h);
+    named.slice(0,6).forEach(function(n){
+      var tr = document.createElement('tr');
+      tr.innerHTML = '<td colspan="2">'+escapeHtml(n.name)+'</td><td class="num">'+n.ha.toFixed(1)+'</td>';
+      tb.appendChild(tr);
+    });
+  }
+
+  document.getElementById('osmnote').textContent = trees < 50
+    ? 'Отдельных деревьев в OSM здесь почти нет — ровно тот пробел, который закрывает разметка жителями. Массивы при этом видны хорошо.'
+    : 'Здесь есть разметка отдельных деревьев (' + trees + ' шт.) — посмотрите, насколько она полная.';
+  toast('Объектов получено: ' + els.length);
+}
+
+/* ================= Сетка дефицита ================= */
+function renderGrid(els){
+  gridLayer.clearLayers();
+
+  var green = [], built = [], roadPts = [];
+  els.forEach(function(el){
+    if(el.tags && el.tags.highway && el.geometry){
+      for(var i=0;i<el.geometry.length;i+=2) roadPts.push(el.geometry[i]);
+      return;
+    }
+    var k = kindOf(el.tags);
+    var rings = ringsOf(el);
+    if(!rings.length) return;
+    if(k){
+      rings.forEach(function(r){ green.push({r:r, bb:bboxOf(r)}); });
+    } else if(el.tags && el.tags.landuse){
+      rings.forEach(function(r){ built.push({r:r, bb:bboxOf(r)}); });
+    }
+  });
+
+  var b = map.getBounds();
+  var latMid = (b.getNorth() + b.getSouth())/2;
+  var widthM = (b.getEast() - b.getWest()) * RAD * R * Math.cos(latMid*RAD);
+  var cellM = Math.min(500, Math.max(250, widthM/26));
+  var dLat = cellM / (R*RAD);
+  var dLon = cellM / (R*RAD*Math.cos(latMid*RAD));
+
+  var roadCells = {};
+  roadPts.forEach(function(p){
+    roadCells[Math.floor((p.lat - b.getSouth())/dLat) + ':' + Math.floor((p.lon - b.getWest())/dLon)] = 1;
+  });
+
+  var rowsN = Math.min(60, Math.ceil((b.getNorth() - b.getSouth())/dLat));
+  var colsN = Math.min(60, Math.ceil((b.getEast()  - b.getWest()) /dLon));
+  var buckets = {high:0, mid:0, low:0};
+  var areaBuckets = {high:0, mid:0, low:0};
+  var livedCells = 0, greenSum = 0, cellHa = (cellM*cellM)/10000;
+  var SAMPLES = 4; /* 4x4 точек на ячейку */
+
+  for(var r0=0; r0<rowsN; r0++){
+    for(var c0=0; c0<colsN; c0++){
+      var s = b.getSouth() + r0*dLat, w = b.getWest() + c0*dLon;
+      var n = s + dLat, e = w + dLon;
+      var gHit = 0, bHit = 0, total = 0;
+
+      for(var i=0;i<SAMPLES;i++){
+        for(var j=0;j<SAMPLES;j++){
+          var la = s + dLat*(i+0.5)/SAMPLES, lo = w + dLon*(j+0.5)/SAMPLES;
+          total++;
+          if(hits(green, la, lo)) gHit++;
+          if(hits(built, la, lo)) bHit++;
+        }
+      }
+      var greenShare = gHit/total;
+      var builtShare = Math.max(bHit/total, roadCells[r0+':'+c0] ? 0.55 : 0);
+      if(builtShare < 0.2) continue;
+
+      livedCells++;
+      greenSum += greenShare;
+      var score = Math.round(100 * builtShare * (1 - greenShare));
+      var tier = score >= 70 ? 'high' : score >= 45 ? 'mid' : 'low';
+      buckets[tier]++; areaBuckets[tier] += cellHa;
+      if(score < 45) continue;
+
+      var col = tier === 'high' ? '#c0392b' : '#e08a2e';
+      L.rectangle([[s,w],[n,e]], {
+        color:col, weight:1, opacity:.65, fillColor:col,
+        fillOpacity: tier === 'high' ? .32 : .18
+      }).bindPopup('<b>Приоритет ' + score + ' из 100</b>' +
+        'Зелени ' + Math.round(greenShare*100) + '% · застройка ' + Math.round(builtShare*100) + '%<br>' +
+        'Ячейка ' + Math.round(cellM) + '×' + Math.round(cellM) + ' м')
+        .addTo(gridLayer);
+    }
+  }
+
+  setStats('defstats', [
+    [livedCells, 'ячеек обжитых'],
+    [buckets.high + buckets.mid, 'с дефицитом'],
+    [buckets.high, 'острый дефицит'],
+    [livedCells ? Math.round(100*greenSum/livedCells) + '%' : '—', '% зелени средн.']
+  ]);
+
+  var tb = document.getElementById('deflist');
+  tb.innerHTML = '';
+  [['high','Острый (70–100)','#c0392b'],['mid','Заметный (45–69)','#e08a2e'],
+   ['low','В норме (0–44)','#2f9e5e']].forEach(function(t){
+    var tr = document.createElement('tr');
+    tr.innerHTML = '<td><span class="swatch" style="background:'+t[2]+'"></span>'+t[1]+'</td>'+
+      '<td class="num">'+buckets[t[0]]+'</td><td class="num">'+Math.round(areaBuckets[t[0]])+'</td>';
+    tb.appendChild(tr);
+  });
+}
+function hits(list, lat, lon){
+  for(var i=0;i<list.length;i++){
+    var o = list[i];
+    if(lat < o.bb.s || lat > o.bb.n || lon < o.bb.w || lon > o.bb.e) continue;
+    if(inRing(lat, lon, o.r)) return true;
+  }
+  return false;
+}
+
+/* ================= Свои деревья ================= */
+var STATE = {ok:{label:'🟢 Норм', color:'#2f9e5e'},
+             care:{label:'🟡 Нужен уход', color:'#c98a16'},
+             bad:{label:'🔴 Аварийное', color:'#c0392b'}};
+var mine = [];
+try { mine = JSON.parse(localStorage.getItem('pvl_trees') || '[]'); } catch(e){ mine = []; }
+function persist(){ try { localStorage.setItem('pvl_trees', JSON.stringify(mine)); } catch(e){} }
+
+function drawMine(){
+  mineLayer.clearLayers();
+  mine.forEach(function(t){
+    L.circleMarker([t.lat, t.lon], {radius:7, weight:2, color:'#fff',
+      fillColor:STATE[t.state].color, fillOpacity:1})
+      .bindPopup('<b>'+escapeHtml(t.species)+'</b>'+STATE[t.state].label +
+        (t.note ? '<br>'+escapeHtml(t.note) : '') +
+        '<br><span style="opacity:.6">'+t.lat.toFixed(5)+', '+t.lon.toFixed(5)+'</span>')
+      .addTo(mineLayer);
+  });
+  var c = {ok:0, care:0, bad:0};
+  mine.forEach(function(t){ c[t.state]++; });
+  setStats('mystats', [[mine.length,'всего'],[c.ok,'норм'],[c.care,'нужен уход'],[c.bad,'аварийные']]);
+  var tb = document.getElementById('mylist');
+  tb.innerHTML = '';
+  mine.slice().reverse().slice(0,40).forEach(function(t){
+    var tr = document.createElement('tr');
+    tr.innerHTML = '<td>'+escapeHtml(t.species)+'</td><td>'+STATE[t.state].label+
+      '</td><td class="num">'+new Date(t.ts).toLocaleDateString('ru-RU')+'</td>';
+    tb.appendChild(tr);
+  });
+}
+
+var addMode = false, pending = null;
+var addBtn = document.getElementById('addmode');
+addBtn.addEventListener('click', function(){
+  addMode = !addMode;
+  addBtn.classList.toggle('on', addMode);
+  addBtn.textContent = addMode ? 'Ткните в карту' : '+ Дерево';
+  map.getContainer().style.cursor = addMode ? 'crosshair' : '';
+});
+map.on('click', function(e){
+  if(!addMode) return;
+  pending = {lat:e.latlng.lat, lon:e.latlng.lng};
+  document.getElementById('dlgCoords').textContent =
+    pending.lat.toFixed(5) + ', ' + pending.lon.toFixed(5);
+  dlg.showModal();
+});
+
+var dlg = document.getElementById('dlg');
+var spSel = document.getElementById('sp');
+SPECIES.forEach(function(s){
+  var o = document.createElement('option');
+  o.textContent = s[0];
+  spSel.appendChild(o);
+});
+var chosenState = 'ok';
+document.getElementById('stateSeg').addEventListener('click', function(ev){
+  var btn = ev.target.closest('button[data-v]');
+  if(!btn) return;
+  chosenState = btn.dataset.v;
+  Array.prototype.forEach.call(this.querySelectorAll('button'), function(x){
+    x.setAttribute('aria-pressed', String(x === btn));
+  });
+});
+dlg.addEventListener('close', function(){
+  if(dlg.returnValue === 'save' && pending){
+    mine.push({lat:pending.lat, lon:pending.lon, species:spSel.value,
+      state:chosenState, note:document.getElementById('note').value.trim(), ts:Date.now()});
+    persist(); drawMine(); toast('Дерево добавлено');
+  }
+  pending = null;
+  document.getElementById('note').value = '';
+});
+
+/* ================= Выгрузка ================= */
+function download(name, text, type){
+  var blob = new Blob([text], {type:type});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  document.body.appendChild(a); a.click();
+  setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+}
+document.getElementById('exportGeo').addEventListener('click', function(){
+  download('pavlodar-trees.geojson', JSON.stringify({type:'FeatureCollection',
+    features: mine.map(function(t,i){
+      return {type:'Feature', geometry:{type:'Point', coordinates:[t.lon, t.lat]},
+        properties:{id:i+1, species:t.species, state:t.state, note:t.note,
+          surveyed:new Date(t.ts).toISOString()}};
+    })}, null, 2), 'application/geo+json');
+});
+document.getElementById('exportCsv').addEventListener('click', function(){
+  var rows = [['id','lat','lon','poroda','sostoyanie','zametka','data']];
+  mine.forEach(function(t,i){
+    rows.push([i+1, t.lat.toFixed(6), t.lon.toFixed(6), t.species, t.state,
+      (t.note||'').replace(/[;\n]/g,' '), new Date(t.ts).toISOString()]);
+  });
+  download('pavlodar-trees.csv', '﻿'+rows.map(function(r){return r.join(';');}).join('\n'), 'text/csv');
+});
+document.getElementById('clearMine').addEventListener('click', function(){
+  if(!mine.length) return;
+  mine = []; persist(); drawMine(); toast('Очищено');
+});
+
+/* ================= Интерфейс ================= */
+document.getElementById('baseGroup').addEventListener('click', function(ev){
+  var btn = ev.target.closest('button[data-base]');
+  if(!btn || btn.dataset.base === currentBase) return;
+  map.removeLayer(bases[currentBase]);
+  currentBase = btn.dataset.base;
+  bases[currentBase].addTo(map);
+  if(greenLayer._map) greenLayer.bringToFront && greenLayer.bringToFront();
+  Array.prototype.forEach.call(this.querySelectorAll('button'), function(x){
+    x.setAttribute('aria-pressed', String(x === btn));
+  });
+});
+document.getElementById('layerGroup').addEventListener('click', function(ev){
+  var btn = ev.target.closest('button[data-layer]');
+  if(!btn) return;
+  var layer = btn.dataset.layer === 'green' ? greenLayer : gridLayer;
+  var on = btn.getAttribute('aria-pressed') === 'true';
+  if(on) map.removeLayer(layer); else layer.addTo(map);
+  btn.setAttribute('aria-pressed', String(!on));
+});
+document.getElementById('locate').addEventListener('click', function(){
+  if(!navigator.geolocation){ toast('Геолокация недоступна'); return; }
+  navigator.geolocation.getCurrentPosition(function(p){
+    map.setView([p.coords.latitude, p.coords.longitude], 17);
+  }, function(){ toast('Не удалось определить позицию'); }, {enableHighAccuracy:true, timeout:10000});
+});
+document.getElementById('sheetHead').addEventListener('click', function(){
+  document.getElementById('sheet').classList.toggle('collapsed');
+});
+Array.prototype.forEach.call(document.querySelectorAll('.tab'), function(t){
+  t.addEventListener('click', function(){
+    Array.prototype.forEach.call(document.querySelectorAll('.tab'), function(x){
+      x.classList.toggle('active', x === t);
+    });
+    ['green','deficit','mine','species'].forEach(function(n){
+      document.getElementById('tab-'+n).hidden = (n !== t.dataset.tab);
+    });
+  });
+});
+
+function setStats(id, pairs){
+  var box = document.getElementById(id);
+  box.innerHTML = '';
+  pairs.forEach(function(p){
+    var d = document.createElement('div');
+    d.className = 'stat';
+    d.innerHTML = '<b>'+p[0]+'</b><span>'+p[1]+'</span>';
+    box.appendChild(d);
+  });
+}
+function escapeHtml(s){
+  return String(s).replace(/[&<>"]/g, function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];
+  });
+}
+var toastEl = null, toastTimer = null;
+function toast(msg){
+  if(toastEl) toastEl.remove();
+  toastEl = document.createElement('div');
+  toastEl.className = 'toast';
+  toastEl.textContent = msg;
+  document.body.appendChild(toastEl);
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function(){ if(toastEl){ toastEl.remove(); toastEl = null; } }, 2800);
+}
+
+var specTb = document.getElementById('speclist');
+SPECIES.slice(0,10).forEach(function(s){
+  var tr = document.createElement('tr');
+  tr.innerHTML = '<td><b>'+s[0]+'</b></td><td>'+s[1]+'</td>';
+  specTb.appendChild(tr);
+});
+
+loadBtn.addEventListener('click', loadData);
+drawMine();
+})();
+</script>
+</body>
+</html>
