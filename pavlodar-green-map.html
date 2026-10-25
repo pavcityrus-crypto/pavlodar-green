@@ -728,8 +728,14 @@ function getToken(){
   body.set('client_secret', c.sec);
   return fetch(TOKEN_URL, {method:'POST', body:body,
     headers:{'Content-Type':'application/x-www-form-urlencoded'}})
+    .catch(function(){
+      throw new Error('ШАГ 1 (вход): запрос не дошёл. Это CORS — в настройках клиента Copernicus ' +
+        'домен не разрешён. Откройте панель Copernicus, удалите клиента pavlodar и создайте заново ' +
+        'с галочкой «Allow all domains».');
+    })
     .then(function(r){
-      if(!r.ok) throw new Error(r.status === 401 ? 'Ключи не приняты — проверьте ID и секрет' : 'Токен: HTTP '+r.status);
+      if(r.status === 401) throw new Error('ШАГ 1 (вход): ключи отклонены — проверьте ID и секрет, нет ли лишних пробелов');
+      if(!r.ok) throw new Error('ШАГ 1 (вход): HTTP '+r.status);
       return r.json();
     })
     .then(function(j){
@@ -757,8 +763,8 @@ function loadNDVI(){
   var sw = b.getSouthWest(), ne = b.getNorthEast();
   var latMid = (sw.lat + ne.lat)/2;
   var aspect = ((ne.lng - sw.lng) * Math.cos(latMid*RAD)) / (ne.lat - sw.lat);
-  var H = 640, W = Math.round(H * aspect);
-  if(W > 1400){ W = 1400; H = Math.round(W/aspect); }
+  var H = 384, W = Math.round(H * aspect);
+  if(W > 512){ W = 512; H = Math.round(W/aspect); }
   if(W < 64){ W = 64; }
 
   var range = periodRange();
@@ -790,10 +796,14 @@ function loadNDVI(){
       method:'POST',
       headers:{'Content-Type':'application/json', 'Authorization':'Bearer '+tok},
       body: JSON.stringify(payload)
+    }).catch(function(e){
+      throw new Error('ШАГ 2 (снимок): соединение оборвалось (' + (e && e.message ? e.message : 'нет ответа') +
+        '). Вход прошёл — ключи верны. Чаще всего это мобильный интернет: приблизьте карту ' +
+        'на шаг-два и попробуйте снова, или подключитесь к Wi-Fi.');
     });
   }).then(function(r){
     if(!r.ok) return r.text().then(function(t){
-      throw new Error('Снимок: HTTP '+r.status+(t ? ' — '+t.slice(0,160) : ''));
+      throw new Error('ШАГ 2 (снимок): HTTP '+r.status+(t ? ' — '+t.slice(0,200) : ''));
     });
     return r.blob();
   }).then(function(blob){
@@ -809,9 +819,8 @@ function loadNDVI(){
   }).catch(function(err){
     setProgress(-1);
     ndviBusy = false; btn.disabled = false; btn.textContent = 'Снять NDVI по окну';
-    document.getElementById('ndvinote').textContent = 'Ошибка: ' + err.message +
-      '. Если пишет про ключи — нажмите «Ключи» и вставьте заново. Если про CORS — страница должна быть открыта с того домена, который вы указали в Allowed origins.';
-    toast('NDVI: ' + err.message.slice(0, 60));
+    document.getElementById('ndvinote').textContent = err.message;
+    toast(err.message.slice(0, 48) + '…');
   });
 }
 
