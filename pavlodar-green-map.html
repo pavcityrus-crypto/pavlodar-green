@@ -347,18 +347,31 @@ function colorOf(k){
   return '#2f9e5e';
 }
 
-function buildQuery(b){
-  var bb = b.getSouth().toFixed(5)+','+b.getWest().toFixed(5)+','+
-           b.getNorth().toFixed(5)+','+b.getEast().toFixed(5);
-  var p = [];
-  GREEN_Q.concat(BUILT_Q).forEach(function(q){
-    p.push('way'+q+'('+bb+');');
-    p.push('relation'+q+'('+bb+');');
-  });
+function bboxStr(b){
+  return b.getSouth().toFixed(5)+','+b.getWest().toFixed(5)+','+
+         b.getNorth().toFixed(5)+','+b.getEast().toFixed(5);
+}
+/* Запрос 1: зелень, застройка, деревья. Главное, без чего карта пустая. */
+function buildQueryMain(b){
+  var bb = bboxStr(b), p = [];
+  GREEN_Q.concat(BUILT_Q).forEach(function(q){ p.push('way'+q+'('+bb+');'); });
   p.push('node["natural"="tree"]('+bb+');');
   p.push('way["natural"="tree_row"]('+bb+');');
-  p.push('way["highway"~"^(residential|living_street|unclassified|tertiary|secondary|primary)$"]('+bb+');');
-  return '[out:json][timeout:120];('+p.join('')+');out geom;';
+  return '[out:json][timeout:45];('+p.join('')+');out geom 3000;';
+}
+/* Запрос 2: дороги — только чтобы отличить обжитые кварталы от пустырей. */
+function buildQueryRoads(b){
+  var bb = bboxStr(b);
+  return '[out:json][timeout:30];(' +
+    'way["highway"~"^(residential|living_street|unclassified|tertiary|secondary)$"]('+bb+');' +
+    ');out geom 1500;';
+}
+/* Запрос 3: крупные парки-мультиполигоны. Необязательный. */
+function buildQueryRels(b){
+  var bb = bboxStr(b), p = [];
+  p.push('relation["leisure"~"^(park|garden)$"]('+bb+');');
+  p.push('relation["landuse"~"^(forest|cemetery)$"]('+bb+');');
+  return '[out:json][timeout:30];('+p.join('')+');out geom 300;';
 }
 
 var ENDPOINTS = [
@@ -369,10 +382,23 @@ var ENDPOINTS = [
 function fetchOverpass(query){
   var i = 0;
   function attempt(){
-    return fetch(ENDPOINTS[i], {method:'POST', body:'data='+encodeURIComponent(query),
-      headers:{'Content-Type':'application/x-www-form-urlencoded'}})
-      .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
-      .catch(function(e){ i++; if(i < ENDPOINTS.length) return attempt(); throw e; });
+    var ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    var killer = ctl ? setTimeout(function(){ ctl.abort(); }, 70000) : null;
+    var opts = {method:'POST', body:'data='+encodeURIComponent(query),
+      headers:{'Content-Type':'application/x-www-form-urlencoded'}};
+    if(ctl) opts.signal = ctl.signal;
+    return fetch(ENDPOINTS[i], opts)
+      .then(function(r){
+        if(killer) clearTimeout(killer);
+        if(!r.ok) throw new Error('HTTP '+r.status);
+        return r.json();
+      })
+      .catch(function(e){
+        if(killer) clearTimeout(killer);
+        i++;
+        if(i < ENDPOINTS.length) return attempt();
+        throw e;
+      });
   }
   return attempt();
 }
@@ -422,26 +448,53 @@ var loadBtn = document.getElementById('load');
 var lastData = null;
 
 function loadData(){
+  var b = map.getBounds();
+  if(map.getZoom() < 13){
+    document.getElementById('osmnote').textContent =
+      'Слишком большая область. Приблизьте карту до уровня района — так запрос пройдёт быстро и наверняка.';
+    toast('Приблизьте карту');
+    return;
+  }
   loadBtn.disabled = true;
   loadBtn.textContent = 'Загружаю…';
-  setProgress(15);
-  fetchOverpass(buildQuery(map.getBounds())).then(function(d){
-    setProgress(60);
+  setProgress(10);
+
+  /* Шаг 1 — главное. Без него смысла нет. */
+  fetchOverpass(buildQueryMain(b)).then(function(d){
     lastData = d.elements || [];
+    setProgress(45);
     renderGreen(lastData);
-    setProgress(80);
     renderGrid(lastData);
-    setProgress(100);
-    setTimeout(function(){ setProgress(-1); }, 400);
     loadBtn.disabled = false;
     loadBtn.textContent = 'Обновить по окну';
+
+    /* Шаг 2 — дороги. Не вышло, и ладно: карта уже на экране. */
+    setProgress(60);
+    return fetchOverpass(buildQueryRoads(b)).then(function(r){
+      lastData = lastData.concat(r.elements || []);
+      setProgress(75);
+      renderGrid(lastData);
+    }).catch(function(){ /* дороги не критичны */ });
+  }).then(function(){
+    /* Шаг 3 — крупные парки-мультиполигоны. Тоже необязательный. */
+    setProgress(85);
+    return fetchOverpass(buildQueryRels(b)).then(function(r){
+      if(!r.elements || !r.elements.length) return;
+      lastData = lastData.concat(r.elements);
+      renderGreen(lastData);
+      renderGrid(lastData);
+    }).catch(function(){ /* и без них нормально */ });
+  }).then(function(){
+    setProgress(100);
+    setTimeout(function(){ setProgress(-1); }, 400);
   }).catch(function(err){
     setProgress(-1);
     loadBtn.disabled = false;
     loadBtn.textContent = 'Загрузить данные';
+    var msg = /abort/i.test(err.message) ? 'сервер не ответил за 70 секунд' : err.message;
     document.getElementById('osmnote').textContent =
-      'Не удалось получить данные: ' + err.message +
-      '. Серверы Overpass бывают перегружены — подождите минуту и попробуйте снова, или уменьшите окно карты.';
+      'Не удалось получить данные: ' + msg +
+      '. Приблизьте карту ещё на один-два шага и попробуйте снова — чем меньше область, тем надёжнее.';
     toast('Ошибка загрузки');
   });
 }
