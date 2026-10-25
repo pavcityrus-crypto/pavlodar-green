@@ -135,7 +135,9 @@
   <div class="group" id="layerGroup">
     <button data-layer="green" aria-pressed="true">Зелень</button>
     <button data-layer="grid" aria-pressed="true">Дефицит</button>
+    <button data-layer="ndvi" aria-pressed="true">NDVI</button>
   </div>
+  <button class="btn" id="ndviBtn">🛰 NDVI</button>
   <button class="btn" id="addmode">+ Дерево</button>
   <button class="btn" id="locate" title="Моё местоположение">◎</button>
 </div>
@@ -148,6 +150,7 @@
   <div class="sheet-body">
     <div class="tabs">
       <button class="tab active" data-tab="green">Зелень</button>
+      <button class="tab" data-tab="ndvi">NDVI</button>
       <button class="tab" data-tab="deficit">Дефицит</button>
       <button class="tab" data-tab="mine">Мои деревья</button>
       <button class="tab" data-tab="species">Породы</button>
@@ -168,6 +171,35 @@
       </tbody></table>
       <div class="progress" id="prog" hidden><i></i></div>
       <p class="note" id="osmnote"></p>
+    </div>
+
+    <div id="tab-ndvi" hidden>
+      <div class="stats" id="ndvistats">
+        <div class="stat"><b>—</b><span>средний NDVI</span></div>
+        <div class="stat"><b>—</b><span>% густой зелени</span></div>
+        <div class="stat"><b>—</b><span>% голой земли</span></div>
+        <div class="stat"><b>—</b><span>снимок</span></div>
+      </div>
+      <label for="period" style="margin-top:0">Период съёмки</label>
+      <select id="period">
+        <option value="2026-06-01:2026-08-31">Лето 2026 — пик листвы</option>
+        <option value="2025-06-01:2025-08-31">Лето 2025 — для сравнения</option>
+        <option value="2026-05-01:2026-05-31">Май 2026 — начало сезона</option>
+        <option value="recent">Последние 45 дней</option>
+      </select>
+      <div class="row">
+        <button class="btn primary" id="ndviLoad">Снять NDVI по окну</button>
+        <button class="btn" id="keysBtn">Ключи</button>
+      </div>
+      <table style="margin-top:12px"><tbody>
+        <tr><td><span class="swatch" style="background:#9b6a2f"></span>до 0,15</td><td>асфальт, крыши, голая земля</td></tr>
+        <tr><td><span class="swatch" style="background:#d9c97a"></span>0,15–0,30</td><td>редкая трава, газон под стрессом</td></tr>
+        <tr><td><span class="swatch" style="background:#78b24a"></span>0,30–0,50</td><td>нормальная растительность</td></tr>
+        <tr><td><span class="swatch" style="background:#14532d"></span>выше 0,50</td><td>густые кроны, парк, лес</td></tr>
+      </tbody></table>
+      <p class="note" id="ndvinote">NDVI — индекс растительности по снимкам Sentinel-2, разрешение 10 м.
+        Считается из красного и ближнего инфракрасного каналов: живая листва сильно отражает инфракрасный свет,
+        асфальт и сухая земля — нет. Работает только на опубликованном сайте, не из локального файла.</p>
     </div>
 
     <div id="tab-deficit" hidden>
@@ -209,6 +241,21 @@
     </div>
   </div>
 </section>
+
+<dialog id="keysDlg">
+  <form method="dialog" class="dlg-body">
+    <h2>Ключи Copernicus</h2>
+    <p class="coords">Хранятся только в этом браузере и никуда больше не уходят.</p>
+    <label for="cid">Client ID</label>
+    <input type="text" id="cid" placeholder="sh-xxxxxxxx-...">
+    <label for="csec">Client secret</label>
+    <input type="text" id="csec" placeholder="вставьте секрет">
+    <div class="row">
+      <button class="btn primary" value="save">Сохранить</button>
+      <button class="btn" value="cancel">Отмена</button>
+    </div>
+  </form>
+</dialog>
 
 <dialog id="dlg">
   <form method="dialog" class="dlg-body">
@@ -265,6 +312,7 @@ var bases = {
 bases.osm.addTo(map);
 var currentBase = 'osm';
 
+var ndviLayer  = L.layerGroup().addTo(map);
 var greenLayer = L.layerGroup().addTo(map);
 var gridLayer  = L.layerGroup().addTo(map);
 var mineLayer  = L.layerGroup().addTo(map);
@@ -518,7 +566,7 @@ function renderGrid(els){
   var colsN = Math.min(60, Math.ceil((b.getEast()  - b.getWest()) /dLon));
   var buckets = {high:0, mid:0, low:0};
   var areaBuckets = {high:0, mid:0, low:0};
-  var livedCells = 0, greenSum = 0, cellHa = (cellM*cellM)/10000;
+  var livedCells = 0, greenSum = 0, satCells = 0, cellHa = (cellM*cellM)/10000;
   var SAMPLES = 4; /* 4x4 точек на ячейку */
 
   for(var r0=0; r0<rowsN; r0++){
@@ -536,6 +584,8 @@ function renderGrid(els){
         }
       }
       var greenShare = gHit/total;
+      var fromSat = ndviShare(s, w, n, e);
+      if(fromSat !== null){ greenShare = fromSat; satCells++; }
       var builtShare = Math.max(bHit/total, roadCells[r0+':'+c0] ? 0.55 : 0);
       if(builtShare < 0.2) continue;
 
@@ -552,6 +602,7 @@ function renderGrid(els){
         fillOpacity: tier === 'high' ? .32 : .18
       }).bindPopup('<b>Приоритет ' + score + ' из 100</b>' +
         'Зелени ' + Math.round(greenShare*100) + '% · застройка ' + Math.round(builtShare*100) + '%<br>' +
+        'Источник: ' + (fromSat !== null ? 'спутник' : 'разметка OSM') + '<br>' +
         'Ячейка ' + Math.round(cellM) + '×' + Math.round(cellM) + ' м')
         .addTo(gridLayer);
     }
@@ -561,7 +612,8 @@ function renderGrid(els){
     [livedCells, 'ячеек обжитых'],
     [buckets.high + buckets.mid, 'с дефицитом'],
     [buckets.high, 'острый дефицит'],
-    [livedCells ? Math.round(100*greenSum/livedCells) + '%' : '—', '% зелени средн.']
+    [livedCells ? Math.round(100*greenSum/livedCells) + '%' : '—',
+     satCells ? '% зелени (спутник)' : '% зелени (OSM)']
   ]);
 
   var tb = document.getElementById('deflist');
@@ -582,6 +634,249 @@ function hits(list, lat, lon){
   }
   return false;
 }
+
+/* ================= NDVI со спутника (Sentinel-2 через Copernicus) ================= */
+var TOKEN_URL = 'https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token';
+var PROCESS_URL = 'https://sh.dataspace.copernicus.eu/api/v1/process';
+
+var EVALSCRIPT = [
+  '//VERSION=3',
+  'function setup(){return{input:[{bands:["B04","B08","dataMask"]}],output:{bands:2,sampleType:"UINT8"}}}',
+  'function evaluatePixel(s){',
+  '  if(s.dataMask===0) return [0,0];',
+  '  var d=s.B08+s.B04;',
+  '  var n=(d===0)?0:(s.B08-s.B04)/d;',
+  '  var v=Math.round((n+1)*127.5);',
+  '  if(v<0)v=0; if(v>255)v=255;',
+  '  return [v,255];',
+  '}'
+].join('\n');
+
+var ndvi = null;          /* {w,h,vals:Float32Array,bounds} */
+var tokenCache = {value:null, exp:0};
+
+function creds(){
+  try {
+    var raw = localStorage.getItem('cdse_creds');
+    return raw ? JSON.parse(raw) : null;
+  } catch(e){ return null; }
+}
+function saveCreds(id, sec){
+  try { localStorage.setItem('cdse_creds', JSON.stringify({id:id, sec:sec})); } catch(e){}
+}
+
+function getToken(){
+  if(tokenCache.value && Date.now() < tokenCache.exp - 30000) return Promise.resolve(tokenCache.value);
+  var c = creds();
+  if(!c) return Promise.reject(new Error('Ключи не заданы'));
+  var body = new URLSearchParams();
+  body.set('grant_type','client_credentials');
+  body.set('client_id', c.id);
+  body.set('client_secret', c.sec);
+  return fetch(TOKEN_URL, {method:'POST', body:body,
+    headers:{'Content-Type':'application/x-www-form-urlencoded'}})
+    .then(function(r){
+      if(!r.ok) throw new Error(r.status === 401 ? 'Ключи не приняты — проверьте ID и секрет' : 'Токен: HTTP '+r.status);
+      return r.json();
+    })
+    .then(function(j){
+      tokenCache.value = j.access_token;
+      tokenCache.exp = Date.now() + (j.expires_in || 600)*1000;
+      return j.access_token;
+    });
+}
+
+function periodRange(){
+  var v = document.getElementById('period').value;
+  if(v === 'recent'){
+    var to = new Date(), from = new Date(Date.now() - 45*864e5);
+    return [from.toISOString().slice(0,10), to.toISOString().slice(0,10)];
+  }
+  return v.split(':');
+}
+
+var ndviBusy = false;
+function loadNDVI(){
+  if(ndviBusy) return;
+  if(!creds()){ openKeys(); return; }
+
+  var b = map.getBounds();
+  var sw = b.getSouthWest(), ne = b.getNorthEast();
+  var latMid = (sw.lat + ne.lat)/2;
+  var aspect = ((ne.lng - sw.lng) * Math.cos(latMid*RAD)) / (ne.lat - sw.lat);
+  var H = 640, W = Math.round(H * aspect);
+  if(W > 1400){ W = 1400; H = Math.round(W/aspect); }
+  if(W < 64){ W = 64; }
+
+  var range = periodRange();
+  var btn = document.getElementById('ndviLoad');
+  ndviBusy = true;
+  btn.disabled = true; btn.textContent = 'Снимаю…';
+  setProgress(20);
+
+  getToken().then(function(tok){
+    setProgress(45);
+    var payload = {
+      input: {
+        bounds: {bbox: [sw.lng, sw.lat, ne.lng, ne.lat],
+                 properties: {crs: 'http://www.opengis.net/def/crs/EPSG/0/4326'}},
+        data: [{
+          type: 'sentinel-2-l2a',
+          dataFilter: {
+            timeRange: {from: range[0]+'T00:00:00Z', to: range[1]+'T23:59:59Z'},
+            maxCloudCoverage: 25,
+            mosaickingOrder: 'leastCC'
+          }
+        }]
+      },
+      output: {width: W, height: H,
+               responses: [{identifier:'default', format:{type:'image/png'}}]},
+      evalscript: EVALSCRIPT
+    };
+    return fetch(PROCESS_URL, {
+      method:'POST',
+      headers:{'Content-Type':'application/json', 'Authorization':'Bearer '+tok},
+      body: JSON.stringify(payload)
+    });
+  }).then(function(r){
+    if(!r.ok) return r.text().then(function(t){
+      throw new Error('Снимок: HTTP '+r.status+(t ? ' — '+t.slice(0,160) : ''));
+    });
+    return r.blob();
+  }).then(function(blob){
+    setProgress(70);
+    return decodeNDVI(blob, W, H, b);
+  }).then(function(){
+    setProgress(90);
+    renderGrid(lastData || []);
+    setProgress(100);
+    setTimeout(function(){ setProgress(-1); }, 400);
+    ndviBusy = false; btn.disabled = false; btn.textContent = 'Обновить NDVI';
+    toast('NDVI загружен');
+  }).catch(function(err){
+    setProgress(-1);
+    ndviBusy = false; btn.disabled = false; btn.textContent = 'Снять NDVI по окну';
+    document.getElementById('ndvinote').textContent = 'Ошибка: ' + err.message +
+      '. Если пишет про ключи — нажмите «Ключи» и вставьте заново. Если про CORS — страница должна быть открыта с того домена, который вы указали в Allowed origins.';
+    toast('NDVI: ' + err.message.slice(0, 60));
+  });
+}
+
+function decodeNDVI(blob, W, H, bounds){
+  return new Promise(function(resolve, reject){
+    var url = URL.createObjectURL(blob);
+    var img = new Image();
+    img.onload = function(){
+      try {
+        var cv = document.createElement('canvas');
+        cv.width = W; cv.height = H;
+        var cx = cv.getContext('2d');
+        cx.drawImage(img, 0, 0, W, H);
+        var px = cx.getImageData(0, 0, W, H).data;
+
+        var vals = new Float32Array(W*H);
+        var out = cx.createImageData(W, H);
+        var o = out.data;
+        var sum = 0, n = 0, dense = 0, bare = 0;
+
+        for(var i=0, p=0; i<vals.length; i++, p+=4){
+          if(px[p+3] === 0){ vals[i] = NaN; o[p+3] = 0; continue; }
+          var v = px[p]/127.5 - 1;
+          vals[i] = v;
+          sum += v; n++;
+          if(v >= 0.30) dense++;
+          if(v < 0.15) bare++;
+          var c = rampNDVI(v);
+          o[p] = c[0]; o[p+1] = c[1]; o[p+2] = c[2]; o[p+3] = 190;
+        }
+        cx.putImageData(out, 0, 0);
+
+        ndvi = {w:W, h:H, vals:vals,
+                s:bounds.getSouth(), w0:bounds.getWest(),
+                n:bounds.getNorth(), e:bounds.getEast()};
+
+        ndviLayer.clearLayers();
+        L.imageOverlay(cv.toDataURL('image/png'), bounds, {opacity:0.78}).addTo(ndviLayer);
+
+        var range = periodRange();
+        setStats('ndvistats', [
+          [n ? (sum/n).toFixed(2) : '—', 'средний NDVI'],
+          [n ? Math.round(100*dense/n) + '%' : '—', '% густой зелени'],
+          [n ? Math.round(100*bare/n) + '%' : '—', '% голой земли'],
+          [range[0].slice(0,7), 'снимок']
+        ]);
+        document.getElementById('ndvinote').textContent = n
+          ? 'Снимок получен: ' + W + '×' + H + ' пикселей. Сетка дефицита теперь считается по спутнику, а не по разметке OSM.'
+          : 'Снимок пустой — в этот период не нашлось кадров без облаков. Попробуйте другой период.';
+        URL.revokeObjectURL(url);
+        resolve();
+      } catch(e){ URL.revokeObjectURL(url); reject(e); }
+    };
+    img.onerror = function(){ URL.revokeObjectURL(url); reject(new Error('Снимок не декодировался')); };
+    img.src = url;
+  });
+}
+
+function rampNDVI(v){
+  if(v < 0.05) return [140, 112, 86];
+  if(v < 0.15) return [155, 106, 47];
+  if(v < 0.30) return [217, 201, 122];
+  if(v < 0.40) return [168, 198, 108];
+  if(v < 0.50) return [120, 178, 74];
+  if(v < 0.65) return [52, 140, 70];
+  return [20, 83, 45];
+}
+
+/* доля «зелёных» пикселей NDVI внутри прямоугольника ячейки */
+function ndviShare(s, w, n, e){
+  if(!ndvi) return null;
+  var x0 = Math.floor((w - ndvi.w0)/(ndvi.e - ndvi.w0) * ndvi.w);
+  var x1 = Math.ceil ((e - ndvi.w0)/(ndvi.e - ndvi.w0) * ndvi.w);
+  var y0 = Math.floor((ndvi.n - n)/(ndvi.n - ndvi.s) * ndvi.h);
+  var y1 = Math.ceil ((ndvi.n - s)/(ndvi.n - ndvi.s) * ndvi.h);
+  x0 = Math.max(0, x0); y0 = Math.max(0, y0);
+  x1 = Math.min(ndvi.w, x1); y1 = Math.min(ndvi.h, y1);
+  var tot = 0, green = 0;
+  for(var y=y0; y<y1; y++){
+    var row = y*ndvi.w;
+    for(var x=x0; x<x1; x++){
+      var v = ndvi.vals[row + x];
+      if(isNaN(v)) continue;
+      tot++;
+      if(v >= 0.30) green++;
+    }
+  }
+  return tot < 8 ? null : green/tot;
+}
+
+function openKeys(){
+  var c = creds();
+  if(c){ document.getElementById('cid').value = c.id; document.getElementById('csec').value = c.sec; }
+  keysDlg.showModal();
+}
+var keysDlg = document.getElementById('keysDlg');
+keysDlg.addEventListener('close', function(){
+  if(keysDlg.returnValue !== 'save') return;
+  var id = document.getElementById('cid').value.trim();
+  var sec = document.getElementById('csec').value.trim();
+  if(!id || !sec){ toast('Заполните оба поля'); return; }
+  saveCreds(id, sec);
+  tokenCache = {value:null, exp:0};
+  toast('Ключи сохранены');
+  loadNDVI();
+});
+document.getElementById('keysBtn').addEventListener('click', openKeys);
+document.getElementById('ndviLoad').addEventListener('click', loadNDVI);
+document.getElementById('ndviBtn').addEventListener('click', function(){
+  Array.prototype.forEach.call(document.querySelectorAll('.tab'), function(x){
+    x.classList.toggle('active', x.dataset.tab === 'ndvi');
+  });
+  ['green','ndvi','deficit','mine','species'].forEach(function(nm){
+    document.getElementById('tab-'+nm).hidden = (nm !== 'ndvi');
+  });
+  document.getElementById('sheet').classList.remove('collapsed');
+  loadNDVI();
+});
 
 /* ================= Свои деревья ================= */
 var STATE = {ok:{label:'🟢 Норм', color:'#2f9e5e'},
@@ -701,7 +996,8 @@ document.getElementById('baseGroup').addEventListener('click', function(ev){
 document.getElementById('layerGroup').addEventListener('click', function(ev){
   var btn = ev.target.closest('button[data-layer]');
   if(!btn) return;
-  var layer = btn.dataset.layer === 'green' ? greenLayer : gridLayer;
+  var layer = btn.dataset.layer === 'green' ? greenLayer
+            : btn.dataset.layer === 'ndvi'  ? ndviLayer : gridLayer;
   var on = btn.getAttribute('aria-pressed') === 'true';
   if(on) map.removeLayer(layer); else layer.addTo(map);
   btn.setAttribute('aria-pressed', String(!on));
@@ -720,7 +1016,7 @@ Array.prototype.forEach.call(document.querySelectorAll('.tab'), function(t){
     Array.prototype.forEach.call(document.querySelectorAll('.tab'), function(x){
       x.classList.toggle('active', x === t);
     });
-    ['green','deficit','mine','species'].forEach(function(n){
+    ['green','ndvi','deficit','mine','species'].forEach(function(n){
       document.getElementById('tab-'+n).hidden = (n !== t.dataset.tab);
     });
   });
