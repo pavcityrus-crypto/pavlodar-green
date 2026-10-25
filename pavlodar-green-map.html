@@ -117,6 +117,33 @@
     bottom:calc(76px + env(safe-area-inset-bottom,0px));
     background:var(--fg);color:var(--bg);padding:9px 15px;border-radius:999px;
     font-size:13.5px;font-weight:600;box-shadow:var(--shadow);max-width:86vw;text-align:center}
+  .chat-log{
+    max-height:34vh;overflow-y:auto;display:flex;flex-direction:column;gap:9px;
+    padding:4px 0 10px;
+  }
+  .msg{
+    padding:9px 12px;border-radius:12px;font-size:14px;line-height:1.45;
+    max-width:88%;white-space:pre-wrap;word-wrap:break-word;
+  }
+  .msg.bot{background:var(--accent-soft);color:var(--fg);align-self:flex-start;border-bottom-left-radius:4px}
+  .msg.me{background:var(--accent);color:#fff;align-self:flex-end;border-bottom-right-radius:4px}
+  .msg.err{background:#fdecea;color:#8b2c22;align-self:flex-start;font-size:13px}
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]) .msg.err{background:#3a211e;color:#f0b3aa}
+  }
+  .msg.typing{opacity:.65;font-style:italic}
+  .chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:9px}
+  .chip{
+    border:1px solid var(--line);background:transparent;color:var(--muted);
+    border-radius:999px;padding:6px 11px;font-size:12.5px;cursor:pointer;text-align:left;
+  }
+  .chip:active{background:var(--accent-soft);color:var(--accent)}
+  .chat-row{display:flex;gap:7px}
+  .chat-row input{
+    flex:1;min-width:0;padding:10px 12px;border:1px solid var(--line);border-radius:10px;
+    background:var(--bg);color:var(--fg);font:inherit;font-size:15px;
+  }
+  .chat-row button{flex:0 0 auto;min-width:46px;font-size:17px}
   .leaflet-container{background:var(--bg)}
   .leaflet-popup-content{font:inherit;font-size:13.5px;margin:11px 13px}
   .leaflet-popup-content b{display:block;margin-bottom:2px}
@@ -153,6 +180,7 @@
       <button class="tab" data-tab="ndvi">NDVI</button>
       <button class="tab" data-tab="deficit">Дефицит</button>
       <button class="tab" data-tab="mine">Мои деревья</button>
+      <button class="tab" data-tab="ai">Ассистент</button>
       <button class="tab" data-tab="species">Породы</button>
     </div>
 
@@ -234,6 +262,24 @@
       <p class="note">Записи живут только в этом браузере. На хакатоне их место — в общей базе.</p>
     </div>
 
+    <div id="tab-ai" hidden>
+      <div id="chatLog" class="chat-log">
+        <div class="msg bot">Спросите про участок, который сейчас на экране. Я вижу ваши цифры NDVI,
+          данные OSM и сетку дефицита.</div>
+      </div>
+      <div class="chips" id="chips">
+        <button class="chip">Что сажать в этом районе?</button>
+        <button class="chip">Разбери цифры на экране</button>
+        <button class="chip">Где сажать в первую очередь?</button>
+        <button class="chip">Что делать с деревьями в октябре?</button>
+      </div>
+      <form class="chat-row" id="chatForm">
+        <input type="text" id="chatInput" placeholder="Ваш вопрос…" autocomplete="off">
+        <button class="btn primary" type="submit" id="chatSend">→</button>
+      </form>
+      <p class="note" id="ainote">Работает на DeepSeek. Ключ хранится только в этом браузере — кнопка «Ключи» на вкладке NDVI.</p>
+    </div>
+
     <div id="tab-species" hidden>
       <table><thead><tr><th>Порода</th><th>Для Павлодара</th></tr></thead>
         <tbody id="speclist"></tbody></table>
@@ -250,6 +296,8 @@
     <input type="text" id="cid" placeholder="sh-xxxxxxxx-...">
     <label for="csec">Client secret</label>
     <input type="text" id="csec" placeholder="вставьте секрет">
+    <label for="dskey">Ключ DeepSeek (для ассистента)</label>
+    <input type="text" id="dskey" placeholder="sk-...">
     <div class="row">
       <button class="btn primary" value="save">Сохранить</button>
       <button class="btn" value="cancel">Отмена</button>
@@ -914,6 +962,7 @@ function ndviShare(s, w, n, e){
 function openKeys(){
   var c = creds();
   if(c){ document.getElementById('cid').value = c.id; document.getElementById('csec').value = c.sec; }
+  try { document.getElementById('dskey').value = localStorage.getItem('ds_key') || ''; } catch(e){}
   keysDlg.showModal();
 }
 var keysDlg = document.getElementById('keysDlg');
@@ -921,11 +970,14 @@ keysDlg.addEventListener('close', function(){
   if(keysDlg.returnValue !== 'save') return;
   var id = document.getElementById('cid').value.trim();
   var sec = document.getElementById('csec').value.trim();
-  if(!id || !sec){ toast('Заполните оба поля'); return; }
-  saveCreds(id, sec);
-  tokenCache = {value:null, exp:0};
+  var ds = document.getElementById('dskey').value.trim();
+  try { if(ds) localStorage.setItem('ds_key', ds); } catch(e){}
+  if(id && sec){
+    saveCreds(id, sec);
+    tokenCache = {value:null, exp:0};
+  }
   toast('Ключи сохранены');
-  loadNDVI();
+  if(id && sec && !ndvi) loadNDVI();
 });
 document.getElementById('keysBtn').addEventListener('click', openKeys);
 document.getElementById('ndviLoad').addEventListener('click', loadNDVI);
@@ -933,11 +985,177 @@ document.getElementById('ndviBtn').addEventListener('click', function(){
   Array.prototype.forEach.call(document.querySelectorAll('.tab'), function(x){
     x.classList.toggle('active', x.dataset.tab === 'ndvi');
   });
-  ['green','ndvi','deficit','mine','species'].forEach(function(nm){
+  ['green','ndvi','deficit','mine','ai','species'].forEach(function(nm){
     document.getElementById('tab-'+nm).hidden = (nm !== 'ndvi');
   });
   document.getElementById('sheet').classList.remove('collapsed');
   loadNDVI();
+});
+
+/* ================= Ассистент (DeepSeek) ================= */
+var DS_URL = 'https://api.deepseek.com/chat/completions';
+
+var SYSTEM_PROMPT = [
+'Ты — ассистент по городскому озеленению Павлодара (Казахстан). Отвечаешь коротко и по делу,',
+'обычными словами, без канцелярита. Максимум 150 слов, если не просят подробнее.',
+'',
+'УСЛОВИЯ ПАВЛОДАРА, которые ты всегда учитываешь:',
+'- резко континентальный климат: зима до -35, лето до +40, осадков около 300 мм в год',
+'- почвы часто засолённые и песчаные, грунтовые воды местами близко',
+'- сильные ветры, зимой метели',
+'- крупный промышленный центр: энергетика и металлургия дают основное загрязнение воздуха',
+'- зимой дороги посыпают реагентами, соль губит уличные деревья',
+'- нормативы озеленения на жителя не выполняются; экологи требуют мораторий на вырубку',
+'- в области планируют высадить более 420 тысяч деревьев за пять лет, но полива часто нет и саженцы гибнут',
+'',
+'ПОРОДЫ (твоя шпаргалка):',
+'- карагач (вяз мелколистный) — засухо- и солеустойчив, быстро растёт; минусы: ломкие ветви, самосев',
+'- лох серебристый (джида) — самый устойчивый: засуха, засоление, ветер; хорош для промзон и обочин',
+'- яблоня сибирская (ранетка) — зимостойка, компактна, декоративна; для дворов и школ',
+'- рябина обыкновенная — небольшая, декоративна круглый год, для узких мест',
+'- ясень пенсильванский — вынослив, для ветрозащитных полос, даёт самосев',
+'- сосна обыкновенная — своя для региона, но плохо переносит реагенты и уплотнение почвы',
+'- ель колючая — устойчива к городу, дорогой саженец, медленный рост',
+'- берёза повислая — влаголюбива, в заасфальтированном дворе страдает',
+'- тополь — быстрая тень, но пух, ломкость, аварийность с возрастом',
+'- клён ясенелистный — сорный инвазивный, сильный аллерген, сажать не надо',
+'',
+'ГОДОВОЙ ЦИКЛ УХОДА:',
+'- апрель: посадка и обильный полив сразу после',
+'- май-август: саженцу первые 2-3 года полив раз в 5-7 дней по 20-40 л, в жару чаще',
+'- октябрь до промерзания: влагозарядковый полив — зимой дерево гибнет от высыхания, не от мороза',
+'- февраль-март: солнечные ожоги коры, спасает побелка или обмотка ствола с осени',
+'- всю зиму: соль с дорог — одна из главных причин гибели уличных деревьев',
+'',
+'КАК ЧИТАТЬ NDVI: до 0,15 — асфальт и голая земля; 0,15-0,30 — редкая трава, газон под стрессом;',
+'0,30-0,50 — нормальная растительность; выше 0,50 — густые кроны.',
+'',
+'ВАЖНО ПРО ЧЕСТНОСТЬ: по фотографии нельзя определить внутреннюю гниль, состояние корней и',
+'аварийность — для этого нужен выезд специалиста. Ты делаешь предварительный отбор, а не диагноз.',
+'Если данных на экране нет, так и скажи, не выдумывай цифры.'
+].join('\n');
+
+function dsKey(){
+  try { return localStorage.getItem('ds_key') || ''; } catch(e){ return ''; }
+}
+
+/* Собирает то, что сейчас видно на экране, в текст для модели */
+function screenContext(){
+  var b = map.getBounds(), c = b.getCenter();
+  var L1 = ['Что сейчас на экране у пользователя:',
+    'Центр области: ' + c.lat.toFixed(4) + ', ' + c.lng.toFixed(4) + ' (Павлодар), масштаб ' + map.getZoom()];
+
+  var g = document.querySelectorAll('#stats .stat');
+  if(g.length && g[0].querySelector('b').textContent !== '—'){
+    var vals = [];
+    Array.prototype.forEach.call(g, function(s){
+      vals.push(s.querySelector('b').textContent + ' ' + s.querySelector('span').textContent);
+    });
+    L1.push('Данные OpenStreetMap по области: ' + vals.join(', ') + '.');
+  } else {
+    L1.push('Данные OSM ещё не загружены.');
+  }
+
+  var n = document.querySelectorAll('#ndvistats .stat');
+  if(n.length && n[0].querySelector('b').textContent !== '—'){
+    var nv = [];
+    Array.prototype.forEach.call(n, function(s){
+      nv.push(s.querySelector('b').textContent + ' — ' + s.querySelector('span').textContent);
+    });
+    L1.push('Спутник Sentinel-2 (NDVI): ' + nv.join(', ') + '.');
+  } else {
+    L1.push('NDVI со спутника ещё не снят.');
+  }
+
+  var d = document.querySelectorAll('#defstats .stat');
+  if(d.length && d[0].querySelector('b').textContent !== '—'){
+    var dv = [];
+    Array.prototype.forEach.call(d, function(s){
+      dv.push(s.querySelector('b').textContent + ' ' + s.querySelector('span').textContent);
+    });
+    L1.push('Сетка приоритета посадок: ' + dv.join(', ') + '.');
+  }
+
+  if(mine.length){
+    var cs = {ok:0, care:0, bad:0};
+    mine.forEach(function(t){ cs[t.state]++; });
+    L1.push('Пользователь отметил деревьев: ' + mine.length +
+      ' (норм ' + cs.ok + ', нужен уход ' + cs.care + ', аварийных ' + cs.bad + ').');
+  }
+
+  L1.push('Сегодня ' + new Date().toLocaleDateString('ru-RU', {day:'numeric', month:'long', year:'numeric'}) + '.');
+  return L1.join('\n');
+}
+
+var history = [];
+
+function addMsg(text, cls){
+  var d = document.createElement('div');
+  d.className = 'msg ' + cls;
+  d.textContent = text;
+  var log = document.getElementById('chatLog');
+  log.appendChild(d);
+  log.scrollTop = log.scrollHeight;
+  return d;
+}
+
+function ask(question){
+  if(!question) return;
+  var key = dsKey();
+  if(!key){
+    addMsg('Сначала нужен ключ DeepSeek. Откройте «Ключи» на вкладке NDVI и вставьте его в нижнее поле.', 'err');
+    openKeys();
+    return;
+  }
+
+  addMsg(question, 'me');
+  var typing = addMsg('думаю…', 'bot typing');
+  var send = document.getElementById('chatSend');
+  send.disabled = true;
+
+  var msgs = [{role:'system', content: SYSTEM_PROMPT},
+              {role:'system', content: screenContext()}];
+  history.slice(-6).forEach(function(m){ msgs.push(m); });
+  msgs.push({role:'user', content: question});
+
+  fetch(DS_URL, {
+    method:'POST',
+    headers:{'Content-Type':'application/json', 'Authorization':'Bearer '+key},
+    body: JSON.stringify({model:'deepseek-chat', messages:msgs, temperature:0.4, max_tokens:700})
+  }).catch(function(){
+    throw new Error('Запрос не дошёл. Либо нет интернета, либо DeepSeek не разрешает обращаться ' +
+      'к себе напрямую из браузера. Во втором случае нужен промежуточный сервер — скажите, сделаю.');
+  }).then(function(r){
+    if(r.status === 401) throw new Error('Ключ DeepSeek отклонён — проверьте его.');
+    if(r.status === 402) throw new Error('На балансе DeepSeek нет средств.');
+    if(r.status === 429) throw new Error('Слишком часто — подождите немного.');
+    if(!r.ok) return r.text().then(function(t){ throw new Error('DeepSeek: HTTP '+r.status+' '+t.slice(0,120)); });
+    return r.json();
+  }).then(function(j){
+    var answer = j && j.choices && j.choices[0] && j.choices[0].message
+      ? j.choices[0].message.content : '(пустой ответ)';
+    typing.remove();
+    addMsg(answer, 'bot');
+    history.push({role:'user', content:question});
+    history.push({role:'assistant', content:answer});
+    send.disabled = false;
+  }).catch(function(err){
+    typing.remove();
+    addMsg(err.message, 'err');
+    send.disabled = false;
+  });
+}
+
+document.getElementById('chatForm').addEventListener('submit', function(e){
+  e.preventDefault();
+  var inp = document.getElementById('chatInput');
+  var q = inp.value.trim();
+  inp.value = '';
+  ask(q);
+});
+document.getElementById('chips').addEventListener('click', function(e){
+  var c = e.target.closest('.chip');
+  if(c) ask(c.textContent);
 });
 
 /* ================= Свои деревья ================= */
@@ -1078,7 +1296,7 @@ Array.prototype.forEach.call(document.querySelectorAll('.tab'), function(t){
     Array.prototype.forEach.call(document.querySelectorAll('.tab'), function(x){
       x.classList.toggle('active', x === t);
     });
-    ['green','ndvi','deficit','mine','species'].forEach(function(n){
+    ['green','ndvi','deficit','mine','ai','species'].forEach(function(n){
       document.getElementById('tab-'+n).hidden = (n !== t.dataset.tab);
     });
   });
