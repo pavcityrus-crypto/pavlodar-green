@@ -117,6 +117,26 @@
     bottom:calc(76px + env(safe-area-inset-bottom,0px));
     background:var(--fg);color:var(--bg);padding:9px 15px;border-radius:999px;
     font-size:13.5px;font-weight:600;box-shadow:var(--shadow);max-width:86vw;text-align:center}
+  .photo-box{display:flex;flex-direction:column;gap:9px;align-items:flex-start}
+  .photo-box img{max-width:100%;max-height:190px;border-radius:10px;border:1px solid var(--line)}
+  .id-result{
+    font-size:13.5px;line-height:1.45;background:var(--accent-soft);color:var(--fg);
+    padding:9px 11px;border-radius:10px;width:100%;
+  }
+  .id-result b{display:block}
+  .id-result .conf{color:var(--muted);font-size:12px}
+
+  .qr-wrap{display:flex;flex-direction:column;align-items:center;gap:10px;padding:4px 0 2px}
+  .qr-wrap canvas{border-radius:10px;background:#fff;padding:10px}
+  .tree-card{width:100%;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  .tree-card .hd{background:var(--accent-soft);padding:10px 13px}
+  .tree-card .hd b{font-size:15px}
+  .tree-card .hd span{display:block;color:var(--muted);font-size:12.5px;margin-top:2px}
+  .tree-card dl{margin:0;padding:11px 13px;display:grid;grid-template-columns:auto 1fr;gap:6px 12px;font-size:13.5px}
+  .tree-card dt{color:var(--muted)}
+  .tree-card dd{margin:0}
+  .tree-card img{width:100%;display:block;border-top:1px solid var(--line)}
+
   .chat-log{
     max-height:34vh;overflow-y:auto;display:flex;flex-direction:column;gap:9px;
     padding:4px 0 10px;
@@ -288,6 +308,23 @@
   </div>
 </section>
 
+<dialog id="qrDlg">
+  <form method="dialog" class="dlg-body">
+    <h2>Паспорт дерева</h2>
+    <div class="qr-wrap">
+      <div class="tree-card" id="treeCard"></div>
+      <canvas id="qrCanvas" width="220" height="220"></canvas>
+      <p class="note" style="text-align:center;margin:0">
+        Этот код печатают на металлической бирке. Скан — и жителю открывается карточка:
+        что за дерево, кто посадил, когда поливать, кнопка «сообщить о проблеме».
+      </p>
+    </div>
+    <div class="row">
+      <button class="btn primary" value="close">Закрыть</button>
+    </div>
+  </form>
+</dialog>
+
 <dialog id="keysDlg">
   <form method="dialog" class="dlg-body">
     <h2>Ключи Copernicus</h2>
@@ -298,6 +335,8 @@
     <input type="text" id="csec" placeholder="вставьте секрет">
     <label for="dskey">Ключ DeepSeek (для ассистента)</label>
     <input type="text" id="dskey" placeholder="sk-...">
+    <label for="pnkey">Ключ Pl@ntNet (порода по фото)</label>
+    <input type="text" id="pnkey" placeholder="2b10...">
     <div class="row">
       <button class="btn primary" value="save">Сохранить</button>
       <button class="btn" value="cancel">Отмена</button>
@@ -309,6 +348,15 @@
   <form method="dialog" class="dlg-body">
     <h2>Новое дерево</h2>
     <p class="coords" id="dlgCoords"></p>
+
+    <label for="photoInput">Фото дерева</label>
+    <input type="file" id="photoInput" accept="image/*" capture="environment" hidden>
+    <div class="photo-box" id="photoBox">
+      <img id="photoPrev" alt="" hidden>
+      <button type="button" class="btn" id="photoBtn">📷 Снять или выбрать</button>
+      <div id="idResult" class="id-result" hidden></div>
+    </div>
+
     <label for="sp">Порода</label>
     <select id="sp"></select>
     <label for="stateSeg">Состояние</label>
@@ -327,6 +375,7 @@
 </dialog>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <script>
 (function(){
 'use strict';
@@ -962,7 +1011,10 @@ function ndviShare(s, w, n, e){
 function openKeys(){
   var c = creds();
   if(c){ document.getElementById('cid').value = c.id; document.getElementById('csec').value = c.sec; }
-  try { document.getElementById('dskey').value = localStorage.getItem('ds_key') || ''; } catch(e){}
+  try {
+    document.getElementById('dskey').value = localStorage.getItem('ds_key') || '';
+    document.getElementById('pnkey').value = localStorage.getItem('pn_key') || '';
+  } catch(e){}
   keysDlg.showModal();
 }
 var keysDlg = document.getElementById('keysDlg');
@@ -971,7 +1023,11 @@ keysDlg.addEventListener('close', function(){
   var id = document.getElementById('cid').value.trim();
   var sec = document.getElementById('csec').value.trim();
   var ds = document.getElementById('dskey').value.trim();
-  try { if(ds) localStorage.setItem('ds_key', ds); } catch(e){}
+  var pn = document.getElementById('pnkey').value.trim();
+  try {
+    if(ds) localStorage.setItem('ds_key', ds);
+    if(pn) localStorage.setItem('pn_key', pn);
+  } catch(e){}
   if(id && sec){
     saveCreds(id, sec);
     tokenCache = {value:null, exp:0};
@@ -1089,10 +1145,50 @@ function screenContext(){
 
 var history = [];
 
+/* Лёгкая разметка: **жирный**, списки, абзацы. Без библиотеки, безопасно. */
+function renderMd(text){
+  var out = document.createDocumentFragment();
+  String(text).split(/\n{2,}/).forEach(function(block){
+    var lines = block.split('\n');
+    var isList = lines.every(function(l){ return /^\s*[-*•]\s+/.test(l) || !l.trim(); });
+    if(isList && lines.some(function(l){ return l.trim(); })){
+      var ul = document.createElement('ul');
+      ul.style.margin = '4px 0'; ul.style.paddingLeft = '18px';
+      lines.forEach(function(l){
+        if(!l.trim()) return;
+        var li = document.createElement('li');
+        li.style.marginBottom = '3px';
+        inlineMd(l.replace(/^\s*[-*•]\s+/, ''), li);
+        ul.appendChild(li);
+      });
+      out.appendChild(ul);
+    } else {
+      var p = document.createElement('div');
+      p.style.marginBottom = '6px';
+      inlineMd(block, p);
+      out.appendChild(p);
+    }
+  });
+  return out;
+}
+function inlineMd(s, host){
+  var parts = String(s).split(/(\*\*[^*]+\*\*)/g);
+  parts.forEach(function(p){
+    if(/^\*\*[^*]+\*\*$/.test(p)){
+      var b = document.createElement('strong');
+      b.textContent = p.slice(2, -2);
+      host.appendChild(b);
+    } else if(p){
+      host.appendChild(document.createTextNode(p));
+    }
+  });
+}
+
 function addMsg(text, cls){
   var d = document.createElement('div');
   d.className = 'msg ' + cls;
-  d.textContent = text;
+  if(cls === 'bot' && /\*\*|^\s*[-*•]\s/m.test(text)) d.appendChild(renderMd(text));
+  else d.textContent = text;
   var log = document.getElementById('chatLog');
   log.appendChild(d);
   log.scrollTop = log.scrollHeight;
@@ -1168,12 +1264,14 @@ function persist(){ try { localStorage.setItem('pvl_trees', JSON.stringify(mine)
 
 function drawMine(){
   mineLayer.clearLayers();
-  mine.forEach(function(t){
+  mine.forEach(function(t, idx){
+    var html = '<b>'+escapeHtml(t.species)+'</b>'+STATE[t.state].label +
+      (t.note ? '<br>'+escapeHtml(t.note) : '') +
+      '<br><span style="opacity:.6">'+t.lat.toFixed(5)+', '+t.lon.toFixed(5)+'</span>' +
+      '<br><a href="#" data-qr="'+idx+'" style="color:#2f7d4f;font-weight:600">Паспорт и QR →</a>';
     L.circleMarker([t.lat, t.lon], {radius:7, weight:2, color:'#fff',
       fillColor:STATE[t.state].color, fillOpacity:1})
-      .bindPopup('<b>'+escapeHtml(t.species)+'</b>'+STATE[t.state].label +
-        (t.note ? '<br>'+escapeHtml(t.note) : '') +
-        '<br><span style="opacity:.6">'+t.lat.toFixed(5)+', '+t.lon.toFixed(5)+'</span>')
+      .bindPopup(html)
       .addTo(mineLayer);
   });
   var c = {ok:0, care:0, bad:0};
@@ -1188,6 +1286,143 @@ function drawMine(){
     tb.appendChild(tr);
   });
 }
+
+/* ================= Фото и определение породы (Pl@ntNet) ================= */
+var PN_URL = 'https://my-api.plantnet.org/v2/identify/all';
+var pendingPhoto = null;   /* dataURL уменьшенного фото */
+
+/* Латинское имя -> наша запись в справочнике */
+var LATIN_MAP = [
+  [/ulmus\s+(pumila|parvifolia|minor)/i, 'Карагач (вяз мелколистный)'],
+  [/ulmus/i,                              'Карагач (вяз мелколистный)'],
+  [/populus/i,                            'Тополь (бальзамический, чёрный)'],
+  [/betula/i,                             'Берёза повислая'],
+  [/acer\s+negundo/i,                     'Клён ясенелистный (американский)'],
+  [/elaeagnus/i,                          'Лох серебристый (джида)'],
+  [/malus/i,                              'Яблоня сибирская (ранетка)'],
+  [/pinus\s+sylvestris/i,                 'Сосна обыкновенная'],
+  [/pinus/i,                              'Сосна обыкновенная'],
+  [/picea\s+pungens/i,                    'Ель колючая (голубая)'],
+  [/picea/i,                              'Ель колючая (голубая)'],
+  [/fraxinus/i,                           'Ясень пенсильванский'],
+  [/sorbus/i,                             'Рябина обыкновенная']
+];
+function mapLatin(latin){
+  for(var i=0;i<LATIN_MAP.length;i++) if(LATIN_MAP[i][0].test(latin)) return LATIN_MAP[i][1];
+  return null;
+}
+
+function pnKey(){
+  try { return localStorage.getItem('pn_key') || ''; } catch(e){ return ''; }
+}
+
+/* Уменьшаем снимок до 1024 px по длинной стороне — быстрее и дешевле */
+function shrinkImage(file){
+  return new Promise(function(resolve, reject){
+    var url = URL.createObjectURL(file);
+    var img = new Image();
+    img.onload = function(){
+      var max = 1024, w = img.width, h = img.height;
+      if(w > h && w > max){ h = Math.round(h*max/w); w = max; }
+      else if(h >= w && h > max){ w = Math.round(w*max/h); h = max; }
+      var cv = document.createElement('canvas');
+      cv.width = w; cv.height = h;
+      cv.getContext('2d').drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(url);
+      cv.toBlob(function(blob){
+        resolve({blob: blob, dataUrl: cv.toDataURL('image/jpeg', 0.75)});
+      }, 'image/jpeg', 0.8);
+    };
+    img.onerror = function(){ URL.revokeObjectURL(url); reject(new Error('Не удалось прочитать фото')); };
+    img.src = url;
+  });
+}
+
+function identifyPlant(blob){
+  var key = pnKey();
+  if(!key) return Promise.reject(new Error('NOKEY'));
+  var fd = new FormData();
+  fd.append('images', blob, 'tree.jpg');
+  fd.append('organs', 'auto');
+  return fetch(PN_URL + '?api-key=' + encodeURIComponent(key) + '&lang=ru&nb-results=3', {
+    method:'POST', body: fd
+  }).catch(function(){
+    throw new Error('Запрос к Pl@ntNet не дошёл — проверьте интернет.');
+  }).then(function(r){
+    if(r.status === 401 || r.status === 403) throw new Error('Ключ Pl@ntNet отклонён.');
+    if(r.status === 404) throw new Error('Pl@ntNet не узнал растение на этом фото.');
+    if(r.status === 429) throw new Error('Лимит Pl@ntNet на сегодня исчерпан.');
+    if(!r.ok) throw new Error('Pl@ntNet: HTTP ' + r.status);
+    return r.json();
+  });
+}
+
+function showIdResult(html){
+  var box = document.getElementById('idResult');
+  box.hidden = false;
+  box.innerHTML = '';
+  box.appendChild(html);
+}
+
+document.getElementById('photoBtn').addEventListener('click', function(){
+  document.getElementById('photoInput').click();
+});
+
+document.getElementById('photoInput').addEventListener('change', function(e){
+  var file = e.target.files && e.target.files[0];
+  if(!file) return;
+  var prev = document.getElementById('photoPrev');
+  var btn = document.getElementById('photoBtn');
+
+  shrinkImage(file).then(function(res){
+    pendingPhoto = res.dataUrl;
+    prev.src = res.dataUrl;
+    prev.hidden = false;
+    btn.textContent = '📷 Другое фото';
+
+    var wait = document.createElement('div');
+    wait.textContent = 'Определяю породу…';
+    showIdResult(wait);
+
+    return identifyPlant(res.blob);
+  }).then(function(j){
+    var best = j && j.results && j.results[0];
+    if(!best){
+      var none = document.createElement('div');
+      none.textContent = 'Порода не определилась — выберите вручную.';
+      showIdResult(none);
+      return;
+    }
+    var latin = best.species.scientificNameWithoutAuthor || '';
+    var common = (best.species.commonNames || [])[0] || '';
+    var conf = Math.round(best.score * 100);
+    var ours = mapLatin(latin);
+
+    var box = document.createElement('div');
+    var b = document.createElement('b');
+    b.textContent = ours || common || latin;
+    box.appendChild(b);
+    var c = document.createElement('div');
+    c.className = 'conf';
+    c.textContent = latin + ' · уверенность ' + conf + '%' +
+      (conf < 50 ? ' — низкая, проверьте вручную' : '');
+    box.appendChild(c);
+    showIdResult(box);
+
+    if(ours){
+      var sel = document.getElementById('sp');
+      for(var i=0;i<sel.options.length;i++){
+        if(sel.options[i].textContent === ours){ sel.selectedIndex = i; break; }
+      }
+    }
+  }).catch(function(err){
+    var box = document.createElement('div');
+    box.textContent = err.message === 'NOKEY'
+      ? 'Фото сохранено. Чтобы порода определялась сама, добавьте бесплатный ключ Pl@ntNet через кнопку «Ключи».'
+      : err.message + ' Выберите породу вручную.';
+    showIdResult(box);
+  });
+});
 
 var addMode = false, pending = null;
 var addBtn = document.getElementById('addmode');
@@ -1223,13 +1458,113 @@ document.getElementById('stateSeg').addEventListener('click', function(ev){
 });
 dlg.addEventListener('close', function(){
   if(dlg.returnValue === 'save' && pending){
-    mine.push({lat:pending.lat, lon:pending.lon, species:spSel.value,
-      state:chosenState, note:document.getElementById('note').value.trim(), ts:Date.now()});
+    mine.push({id: nextId(), lat:pending.lat, lon:pending.lon, species:spSel.value,
+      state:chosenState, note:document.getElementById('note').value.trim(),
+      photo: pendingPhoto, ts:Date.now()});
     persist(); drawMine(); toast('Дерево добавлено');
   }
   pending = null;
+  pendingPhoto = null;
   document.getElementById('note').value = '';
+  document.getElementById('photoPrev').hidden = true;
+  document.getElementById('photoPrev').removeAttribute('src');
+  document.getElementById('photoBtn').textContent = '📷 Снять или выбрать';
+  document.getElementById('idResult').hidden = true;
+  document.getElementById('photoInput').value = '';
 });
+
+function nextId(){
+  var max = 0;
+  mine.forEach(function(t){ if(t.id && t.id > max) max = t.id; });
+  return max + 1;
+}
+
+/* ================= Паспорт дерева и QR ================= */
+var qrDlg = document.getElementById('qrDlg');
+
+document.addEventListener('click', function(e){
+  var a = e.target.closest('a[data-qr]');
+  if(!a) return;
+  e.preventDefault();
+  openPassport(mine[parseInt(a.dataset.qr, 10)]);
+});
+
+function wateringAdvice(t){
+  var m = new Date().getMonth() + 1;      /* 1..12 */
+  var age = (Date.now() - t.ts) / 864e5;  /* дней с отметки */
+  var young = age < 365*3;
+  if(m >= 5 && m <= 8)  return young ? 'Полив раз в 5–7 дней, 20–40 л' : 'Полив в сильную жару';
+  if(m === 4)           return 'Посадочный сезон, полив сразу после посадки';
+  if(m === 9 || m === 10) return 'Влагозарядковый полив до промерзания почвы';
+  if(m === 11 || m === 12 || m === 1) return 'Полив не нужен. Беречь от дорожной соли';
+  return 'Февраль–март: риск солнечных ожогов коры, нужна побелка';
+}
+
+function openPassport(t){
+  if(!t) return;
+  var card = document.getElementById('treeCard');
+  card.innerHTML = '';
+
+  var hd = document.createElement('div');
+  hd.className = 'hd';
+  var b = document.createElement('b');
+  b.textContent = t.species;
+  hd.appendChild(b);
+  var s = document.createElement('span');
+  s.textContent = '№ ' + (t.id || '—') + ' · Павлодар';
+  hd.appendChild(s);
+  card.appendChild(hd);
+
+  var dl = document.createElement('dl');
+  [['Состояние', STATE[t.state].label],
+   ['Отмечено', new Date(t.ts).toLocaleDateString('ru-RU')],
+   ['Координаты', t.lat.toFixed(5) + ', ' + t.lon.toFixed(5)],
+   ['Уход сейчас', wateringAdvice(t)],
+   ['Финансирование', 'городской бюджет'],
+   ['Ответственный', 'КСК / акимат района']
+  ].concat(t.note ? [['Заметка', t.note]] : []).forEach(function(row){
+    var dt = document.createElement('dt'); dt.textContent = row[0];
+    var dd = document.createElement('dd'); dd.textContent = row[1];
+    dl.appendChild(dt); dl.appendChild(dd);
+  });
+  card.appendChild(dl);
+
+  if(t.photo){
+    var img = document.createElement('img');
+    img.src = t.photo;
+    img.alt = t.species;
+    card.appendChild(img);
+  }
+
+  var url = location.origin + location.pathname + '#tree' + (t.id || 1);
+  drawQR(document.getElementById('qrCanvas'), url);
+  qrDlg.showModal();
+}
+
+function drawQR(canvas, text){
+  var cx = canvas.getContext('2d');
+  cx.fillStyle = '#fff';
+  cx.fillRect(0, 0, 220, 220);
+  if(typeof qrcode === 'undefined'){
+    cx.fillStyle = '#657068';
+    cx.font = '13px -apple-system, sans-serif';
+    cx.textAlign = 'center';
+    cx.fillText('QR не загрузился', 110, 110);
+    return;
+  }
+  var qr = qrcode(0, 'M');          /* 0 = подобрать версию автоматически */
+  qr.addData(text);
+  qr.make();
+  var n = qr.getModuleCount();
+  var cell = Math.max(2, Math.floor(200 / n));
+  var pad = Math.floor((220 - cell*n) / 2);
+  cx.fillStyle = '#121714';
+  for(var y=0; y<n; y++){
+    for(var x=0; x<n; x++){
+      if(qr.isDark(y, x)) cx.fillRect(pad + x*cell, pad + y*cell, cell, cell);
+    }
+  }
+}
 
 /* ================= Выгрузка ================= */
 function download(name, text, type){
