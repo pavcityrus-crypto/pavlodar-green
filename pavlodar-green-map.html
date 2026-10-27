@@ -74,10 +74,58 @@
   .sheet.collapsed .sheet-head{border-bottom:none}
   .sheet-body{overflow-y:auto;padding:12px 14px 14px}
 
+  /* Три режима работы -> внутри каждого несколько вкладок */
+  .modes{
+    display:flex;gap:0;margin-bottom:10px;border:1px solid var(--line);
+    border-radius:10px;overflow:hidden;
+  }
+  .modes button{
+    flex:1;appearance:none;border:0;background:transparent;color:var(--muted);
+    padding:9px 6px;font:inherit;font-size:14px;font-weight:600;cursor:pointer;
+  }
+  .modes button+button{border-left:1px solid var(--line)}
+  .modes button[aria-pressed=true]{background:var(--accent);color:#fff}
+  .mode-hint{color:var(--muted);font-size:12.5px;margin:0 0 10px;line-height:1.4}
+
   .tabs{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
   .tab{border:1px solid var(--line);background:transparent;color:var(--muted);
     border-radius:999px;padding:5px 11px;font-size:13px;font-weight:600;cursor:pointer}
   .tab.active{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+
+  .layers{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+  .layers-label{
+    color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px;
+    font-weight:600;width:100%;
+  }
+  .layers button{
+    border:1px solid var(--line);background:transparent;color:var(--muted);
+    border-radius:8px;padding:6px 10px;font-size:12.5px;font-weight:600;cursor:pointer;
+  }
+  .layers button[aria-pressed=true]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+
+  .sheet-sub{
+    color:var(--muted);font-size:12px;font-weight:600;text-transform:uppercase;
+    letter-spacing:.5px;flex:0 0 auto;
+  }
+  .sheet.collapsed .sheet-sub{display:inline}
+
+  .fab{
+    position:absolute;z-index:600;
+    right:max(10px,env(safe-area-inset-right,0px));
+    bottom:calc(72px + env(safe-area-inset-bottom,0px));
+    display:flex;align-items:center;gap:7px;
+    background:var(--accent);color:#fff;border:0;border-radius:999px;
+    padding:11px 16px;font:inherit;font-size:14px;font-weight:700;cursor:pointer;
+    box-shadow:0 3px 14px rgba(20,60,36,.35);
+  }
+  .fab:focus-visible{outline:2px solid var(--fg);outline-offset:2px}
+  .fab span[aria-hidden]{font-size:15px}
+  @media (max-width:430px){ .fab-label{display:none} .fab{padding:13px 15px} }
+
+  .ai-dlg{max-height:80vh;overflow-y:auto}
+  .ai-head{display:flex;align-items:center;gap:10px;margin-bottom:4px}
+  .ai-head h2{flex:1;margin:0}
+  dialog#aiDlg{width:min(520px,calc(100vw - 24px))}
 
   .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:8px;margin-bottom:12px}
   .stat{border:1px solid var(--line);border-radius:10px;padding:9px 11px}
@@ -137,6 +185,38 @@
   .tree-card dd{margin:0}
   .tree-card img{width:100%;display:block;border-top:1px solid var(--line)}
 
+  /* Графики: тонкие марки, утопленная сетка, подпись вместо легенды */
+  .chart-fig{margin:0 0 12px;padding:0}
+  .chart-fig figcaption{
+    font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;
+    margin-bottom:8px;font-weight:600;
+  }
+  .chart-host{position:relative;width:100%;overflow-x:auto}
+  .chart-host svg{width:100%;height:auto;display:block;min-width:280px}
+  .chart-tip{
+    position:absolute;pointer-events:none;background:var(--fg);color:var(--bg);
+    padding:5px 9px;border-radius:7px;font-size:12.5px;font-weight:600;white-space:nowrap;
+    transform:translate(-50%,-130%);z-index:5;
+  }
+  .grid-line{stroke:var(--line);stroke-width:1}
+  .axis-text{fill:var(--muted);font-size:11px;font-family:inherit}
+  .axis-text.tabular{font-variant-numeric:tabular-nums}
+  .series-line{fill:none;stroke:var(--accent);stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+  .series-area{fill:var(--accent);opacity:.10}
+  .series-dot{fill:var(--accent);stroke:var(--surface);stroke-width:2}
+  .end-label{fill:var(--fg);font-size:12.5px;font-weight:700;font-variant-numeric:tabular-nums}
+
+  .report-out{
+    margin-top:12px;padding:13px;border:1px solid var(--line);border-radius:12px;
+    font-size:14px;line-height:1.5;background:var(--surface);
+  }
+  .report-out h3{margin:12px 0 5px;font-size:14.5px}
+  .report-out h3:first-child{margin-top:0}
+  .route-badge{
+    background:var(--accent);color:#fff;border-radius:50%;
+    width:22px;height:22px;display:flex;align-items:center;justify-content:center;
+    font-size:12px;font-weight:700;box-shadow:0 1px 4px rgba(0,0,0,.35);
+  }
   .chat-log{
     max-height:34vh;overflow-y:auto;display:flex;flex-direction:column;gap:9px;
     padding:4px 0 10px;
@@ -164,6 +244,9 @@
     background:var(--bg);color:var(--fg);font:inherit;font-size:15px;
   }
   .chat-row button{flex:0 0 auto;min-width:46px;font-size:17px}
+  @keyframes pulse{0%{opacity:.45;r:9}50%{opacity:.12;r:15}100%{opacity:.45;r:9}}
+  .pulse{animation:pulse 1.9s ease-in-out infinite}
+  @media (prefers-reduced-motion: reduce){ .pulse{animation:none;opacity:.3} }
   .leaflet-container{background:var(--bg)}
   .leaflet-popup-content{font:inherit;font-size:13.5px;margin:11px 13px}
   .leaflet-popup-content b{display:block;margin-bottom:2px}
@@ -179,32 +262,36 @@
     <button data-base="osm" aria-pressed="true">Карта</button>
     <button data-base="sat" aria-pressed="false">Спутник</button>
   </div>
-  <div class="group" id="layerGroup">
-    <button data-layer="green" aria-pressed="true">Зелень</button>
-    <button data-layer="grid" aria-pressed="true">Дефицит</button>
-    <button data-layer="ndvi" aria-pressed="true">NDVI</button>
-  </div>
-  <button class="btn" id="ndviBtn">🛰 NDVI</button>
   <button class="btn" id="addmode">+ Дерево</button>
   <button class="btn" id="locate" title="Моё местоположение">◎</button>
 </div>
 
+<button class="fab" id="aiFab" title="Спросить ассистента">
+  <span aria-hidden="true">✦</span><span class="fab-label">Ассистент</span>
+</button>
+
 <section class="sheet" id="sheet">
   <div class="sheet-head" id="sheetHead">
     <h1 id="sheetTitle">Зелёная карта Павлодара</h1>
+    <span class="sheet-sub" id="sheetSub">Анализ</span>
     <span class="chev">▾</span>
   </div>
   <div class="sheet-body">
-    <div class="tabs">
-      <button class="tab active" data-tab="green">Зелень</button>
-      <button class="tab" data-tab="ndvi">NDVI</button>
-      <button class="tab" data-tab="deficit">Дефицит</button>
-      <button class="tab" data-tab="mine">Мои деревья</button>
-      <button class="tab" data-tab="ai">Ассистент</button>
-      <button class="tab" data-tab="species">Породы</button>
+    <div class="modes" id="modes">
+      <button data-mode="analyze" aria-pressed="true">Анализ</button>
+      <button data-mode="plan" aria-pressed="false">План</button>
+      <button data-mode="field" aria-pressed="false">Поле</button>
     </div>
+    <p class="mode-hint" id="modeHint"></p>
+    <div class="tabs" id="tabs"></div>
 
     <div id="tab-green">
+      <div class="layers" id="layerGroup">
+        <span class="layers-label">Слои на карте</span>
+        <button data-layer="green" aria-pressed="true">Зелень OSM</button>
+        <button data-layer="grid" aria-pressed="true">Дефицит</button>
+        <button data-layer="ndvi" aria-pressed="true">Спутник</button>
+      </div>
       <div class="stats" id="stats">
         <div class="stat"><b>—</b><span>зелёных зон</span></div>
         <div class="stat"><b>—</b><span>гектаров</span></div>
@@ -212,12 +299,15 @@
         <div class="stat"><b>—</b><span>аллей линиями</span></div>
       </div>
       <table id="breakdown"><tbody>
-        <tr><td style="color:var(--muted);border:none;padding:4px">
-          Нажмите «Загрузить данные» — запрос уйдёт по видимой области карты.
-          Для начала хватит одного района: чем меньше окно, тем быстрее ответ.
+        <tr><td style="border:none;padding:4px">
+          <b style="display:block;margin-bottom:4px">С чего начать</b>
+          <span style="color:var(--muted)">Наведите карту на свой район и нажмите
+          <b>«Загрузить данные»</b> вверху — посмотрим, что здесь растёт по данным OpenStreetMap.
+          Потом вкладка <b>Спутник</b> покажет, как обстоит дело на самом деле.</span>
         </td></tr>
       </tbody></table>
       <div class="progress" id="prog" hidden><i></i></div>
+      <p class="note" id="progText" hidden></p>
       <p class="note" id="osmnote"></p>
     </div>
 
@@ -250,6 +340,48 @@
         асфальт и сухая земля — нет. Работает только на опубликованном сайте, не из локального файла.</p>
     </div>
 
+    <div id="tab-trend" hidden>
+      <div class="stats" id="trendstats">
+        <div class="stat"><b>—</b><span>лет измерено</span></div>
+        <div class="stat"><b>—</b><span>было в начале</span></div>
+        <div class="stat"><b>—</b><span>стало сейчас</span></div>
+        <div class="stat"><b>—</b><span>тренд за год</span></div>
+      </div>
+      <figure class="chart-fig" id="trendFig" hidden>
+        <figcaption>Густая зелень на участке, доля площади по годам</figcaption>
+        <div class="chart-host"><svg id="trendChart" viewBox="0 0 560 240" role="img"
+          aria-label="График доли густой зелени по годам"></svg></div>
+        <div class="chart-tip" id="trendTip" hidden></div>
+      </figure>
+      <div class="row" style="margin-top:0">
+        <button class="btn primary" id="trendRun">Измерить по годам</button>
+      </div>
+      <p class="note" id="trendnote">Снимает по одному летнему кадру Sentinel-2 за каждый год
+        с 2017-го и считает долю густой зелени. Десять запросов подряд, займёт около минуты.
+        Участок берётся тот, что сейчас на экране.</p>
+    </div>
+
+    <div id="tab-climate" hidden>
+      <div class="stats" id="climstats">
+        <div class="stat"><b>—</b><span>главный ветер</span></div>
+        <div class="stat"><b>—</b><span>средняя скорость</span></div>
+        <div class="stat"><b>—</b><span>дней с ветром 10+</span></div>
+        <div class="stat"><b>—</b><span>солнце в полдень</span></div>
+      </div>
+      <figure class="chart-fig" id="windFig" hidden>
+        <figcaption>Роза ветров: откуда дует, доля дней за три года</figcaption>
+        <div class="chart-host"><svg id="windRose" viewBox="0 0 300 300" role="img"
+          aria-label="Роза ветров Павлодара"></svg></div>
+      </figure>
+      <div class="row" style="margin-top:0">
+        <button class="btn primary" id="climRun">Разобрать климат</button>
+      </div>
+      <div id="climAdvice" class="report-out" hidden></div>
+      <p class="note">Архив погоды Open-Meteo за три года, бесплатно и без ключа.
+        Ветер определяет, где ставить защитные полосы; солнце — с какой стороны дома и площадки
+        сажать, чтобы давать тень.</p>
+    </div>
+
     <div id="tab-deficit" hidden>
       <div class="stats" id="defstats">
         <div class="stat"><b>—</b><span>ячеек обжитых</span></div>
@@ -277,12 +409,67 @@
       <div class="row">
         <button class="btn" id="exportGeo">GeoJSON</button>
         <button class="btn" id="exportCsv">CSV</button>
-        <button class="btn" id="clearMine">Очистить</button>
+        <button class="btn" id="clearMine">Обновить из базы</button>
       </div>
-      <p class="note">Записи живут только в этом браузере. На хакатоне их место — в общей базе.</p>
+      <p class="note" id="minenote">Деревья лежат в общей базе: их видит каждый, кто открыл ссылку.
+        Жёлтый пульс на карте — саженцу пора пить.</p>
     </div>
 
-    <div id="tab-ai" hidden>
+    <div id="tab-water" hidden>
+      <div class="stats" id="waterstats">
+        <div class="stat"><b>—</b><span>нужен полив</span></div>
+        <div class="stat"><b>—</b><span>литров всего</span></div>
+        <div class="stat"><b>—</b><span>дождь за 7 дней</span></div>
+        <div class="stat"><b>—</b><span>макс. температура</span></div>
+      </div>
+      <div class="row" style="margin-top:0">
+        <button class="btn primary" id="waterCalc">Рассчитать по погоде</button>
+        <button class="btn" id="routeBtn">Маршрут обхода</button>
+      </div>
+      <table style="margin-top:12px"><thead><tr><th>№</th><th>Дерево</th><th class="num">Литров</th></tr></thead>
+        <tbody id="waterList"><tr><td colspan="3" style="color:var(--muted);border:none">
+          Нажмите «Рассчитать» — подтянется прогноз погоды на неделю.</td></tr></tbody></table>
+      <p class="note" id="waternote">Прогноз Open-Meteo, бесплатно и без ключа. Саженцу первые три года
+        нужен полив раз в 5–7 дней по 20–40 литров; дождь свыше 10 мм за неделю заменяет один полив.</p>
+    </div>
+
+    <div id="tab-rating" hidden>
+      <div class="stats" id="ratestats">
+        <div class="stat"><b>—</b><span>деревьев в базе</span></div>
+        <div class="stat"><b>—</b><span>школ-шефов</span></div>
+        <div class="stat"><b>—</b><span>поливов всего</span></div>
+        <div class="stat"><b>—</b><span>ждут полива</span></div>
+      </div>
+      <table><thead><tr><th>Школа-шеф</th><th class="num">Деревьев</th><th class="num">Поливов</th></tr></thead>
+        <tbody id="rateList"><tr><td colspan="3" style="color:var(--muted);border:none">
+          Пока никто не взял шефство. Укажите школу при добавлении дерева.</td></tr></tbody></table>
+      <p class="note">Считаются не посадки, а уход: дерево сажают один раз, а поливать нужно три года.
+        Единица учёта — класс, не ребёнок: фамилии школьников в систему не попадают.</p>
+    </div>
+
+    <div id="tab-report" hidden>
+      <p class="note" style="margin-top:0">Заключение по участку, который сейчас на экране:
+        сколько сажать, чего, во что обойдётся и что это даст. Готовится ассистентом по вашим данным.</p>
+      <div class="row" style="margin-top:0">
+        <button class="btn primary" id="repBtn">Подготовить заключение</button>
+        <button class="btn" id="repCopy" hidden>Скопировать</button>
+      </div>
+      <div id="repOut" class="report-out" hidden></div>
+    </div>
+
+
+    <div id="tab-species" hidden>
+      <table><thead><tr><th>Порода</th><th>Для Павлодара</th></tr></thead>
+        <tbody id="speclist"></tbody></table>
+      <p class="note">Черновик на 10 самых частых пород. Перед питчем проверьте у местного питомника.</p>
+    </div>
+  </div>
+</section>
+
+<dialog id="aiDlg">
+  <div class="dlg-body ai-dlg">
+    <div class="ai-head"><h2>Ассистент</h2><button type="button" class="btn" id="aiClose">Закрыть</button></div>
+    <div id="tab-ai">
       <div id="chatLog" class="chat-log">
         <div class="msg bot">Спросите про участок, который сейчас на экране. Я вижу ваши цифры NDVI,
           данные OSM и сетку дефицита.</div>
@@ -299,14 +486,8 @@
       </form>
       <p class="note" id="ainote">Работает на DeepSeek. Ключ хранится только в этом браузере — кнопка «Ключи» на вкладке NDVI.</p>
     </div>
-
-    <div id="tab-species" hidden>
-      <table><thead><tr><th>Порода</th><th>Для Павлодара</th></tr></thead>
-        <tbody id="speclist"></tbody></table>
-      <p class="note">Черновик на 10 самых частых пород. Перед питчем проверьте у местного питомника.</p>
-    </div>
   </div>
-</section>
+</dialog>
 
 <dialog id="qrDlg">
   <form method="dialog" class="dlg-body">
@@ -314,6 +495,7 @@
     <div class="qr-wrap">
       <div class="tree-card" id="treeCard"></div>
       <canvas id="qrCanvas" width="220" height="220"></canvas>
+      <div class="row" id="qrActions" style="margin-top:0;justify-content:center"></div>
       <p class="note" style="text-align:center;margin:0">
         Этот код печатают на металлической бирке. Скан — и жителю открывается карточка:
         что за дерево, кто посадил, когда поливать, кнопка «сообщить о проблеме».
@@ -367,6 +549,10 @@
     </div>
     <label for="note">Заметка</label>
     <input type="text" id="note" placeholder="Напр.: верёвка на стволе, асфальт вплотную">
+    <label for="school">Школа-шеф (необязательно)</label>
+    <input type="text" id="school" placeholder="Напр.: школа №15, 7Б">
+    <label for="sponsor">Кто посадил или оплатил</label>
+    <input type="text" id="sponsor" placeholder="Напр.: акимат, или имя жителя">
     <div class="row">
       <button class="btn primary" value="save">Сохранить</button>
       <button class="btn" value="cancel">Отмена</button>
@@ -379,6 +565,25 @@
 <script>
 (function(){
 'use strict';
+
+if(typeof L === 'undefined'){
+  var box = document.getElementById('map');
+  box.style.display = 'flex';
+  box.style.alignItems = 'center';
+  box.style.justifyContent = 'center';
+  box.style.padding = '24px';
+  box.style.textAlign = 'center';
+  box.innerHTML = '<div style="max-width:420px"><h2 style="margin:0 0 10px;font-size:17px">' +
+    'Библиотека карты не загрузилась</h2><p style="color:var(--muted);line-height:1.5;margin:0">' +
+    'Страница тянет Leaflet с unpkg.com, и сеть его не пропустила. Такое бывает в просмотрщике ' +
+    'внутри приложения и в сетях с фильтрацией.<br><br>Откройте страницу по обычной ссылке ' +
+    'в Safari или Chrome — там она работает.</p></div>';
+  var sheet = document.getElementById('sheet');
+  if(sheet) sheet.hidden = true;
+  var bar = document.querySelector('.bar');
+  if(bar) bar.hidden = true;
+  return;
+}
 
 /* ================= Справочник пород (черновик, север Казахстана) ================= */
 var SPECIES = [
@@ -554,27 +759,27 @@ function loadData(){
   }
   loadBtn.disabled = true;
   loadBtn.textContent = 'Загружаю…';
-  setProgress(10);
+  setProgress(10, 'Запрашиваю зелёные зоны и деревья…');
 
   /* Шаг 1 — главное. Без него смысла нет. */
   fetchOverpass(buildQueryMain(b)).then(function(d){
     lastData = d.elements || [];
-    setProgress(45);
+    setProgress(45, 'Рисую зелёные зоны…');
     renderGreen(lastData);
     renderGrid(lastData);
     loadBtn.disabled = false;
     loadBtn.textContent = 'Обновить по окну';
 
     /* Шаг 2 — дороги. Не вышло, и ладно: карта уже на экране. */
-    setProgress(60);
+    setProgress(60, 'Догружаю улицы для сетки дефицита…');
     return fetchOverpass(buildQueryRoads(b)).then(function(r){
       lastData = lastData.concat(r.elements || []);
-      setProgress(75);
+      setProgress(75, 'Считаю дефицит по ячейкам…');
       renderGrid(lastData);
     }).catch(function(){ /* дороги не критичны */ });
   }).then(function(){
     /* Шаг 3 — крупные парки-мультиполигоны. Тоже необязательный. */
-    setProgress(85);
+    setProgress(85, 'Добираю крупные парки…');
     return fetchOverpass(buildQueryRels(b)).then(function(r){
       if(!r.elements || !r.elements.length) return;
       lastData = lastData.concat(r.elements);
@@ -595,11 +800,17 @@ function loadData(){
     toast('Ошибка загрузки');
   });
 }
-function setProgress(v){
+function setProgress(v, label){
   var p = document.getElementById('prog');
-  if(v < 0){ p.hidden = true; return; }
+  var cap = document.getElementById('progText');
+  if(v < 0){
+    p.hidden = true;
+    if(cap) cap.hidden = true;
+    return;
+  }
   p.hidden = false;
   p.firstElementChild.style.width = v + '%';
+  if(cap && label){ cap.hidden = false; cap.textContent = label; }
 }
 
 function renderGreen(els){
@@ -868,10 +1079,10 @@ function loadNDVI(){
   var btn = document.getElementById('ndviLoad');
   ndviBusy = true;
   btn.disabled = true; btn.textContent = 'Снимаю…';
-  setProgress(20);
+  setProgress(20, 'Вхожу в Copernicus…');
 
   getToken().then(function(tok){
-    setProgress(45);
+    setProgress(45, 'Заказываю снимок Sentinel-2…');
     var payload = {
       input: {
         bounds: {bbox: [sw.lng, sw.lat, ne.lng, ne.lat],
@@ -904,10 +1115,10 @@ function loadNDVI(){
     });
     return r.blob();
   }).then(function(blob){
-    setProgress(70);
+    setProgress(70, 'Разбираю снимок по пикселям…');
     return decodeNDVI(blob, W, H, b);
   }).then(function(){
-    setProgress(90);
+    setProgress(90, 'Пересчитываю дефицит по спутнику…');
     renderGrid(lastData || []);
     setProgress(100);
     setTimeout(function(){ setProgress(-1); }, 400);
@@ -1037,16 +1248,470 @@ keysDlg.addEventListener('close', function(){
 });
 document.getElementById('keysBtn').addEventListener('click', openKeys);
 document.getElementById('ndviLoad').addEventListener('click', loadNDVI);
-document.getElementById('ndviBtn').addEventListener('click', function(){
-  Array.prototype.forEach.call(document.querySelectorAll('.tab'), function(x){
-    x.classList.toggle('active', x.dataset.tab === 'ndvi');
+
+/* ================= Динамика: NDVI по годам ================= */
+var trendData = [];   /* [{year, dense, mean}] */
+
+/* Один замер за лето указанного года. Картинка маленькая — нужна только статистика. */
+function measureYear(year, bounds){
+  return getToken().then(function(tok){
+    var sw = bounds.getSouthWest(), ne = bounds.getNorthEast();
+    var payload = {
+      input: {
+        bounds: {bbox:[sw.lng, sw.lat, ne.lng, ne.lat],
+                 properties:{crs:'http://www.opengis.net/def/crs/EPSG/0/4326'}},
+        data: [{type:'sentinel-2-l2a', dataFilter:{
+          timeRange:{from: year+'-06-15T00:00:00Z', to: year+'-08-20T23:59:59Z'},
+          maxCloudCoverage: 20, mosaickingOrder:'leastCC'}}]
+      },
+      output: {width:160, height:160, responses:[{identifier:'default', format:{type:'image/png'}}]},
+      evalscript: EVALSCRIPT
+    };
+    return fetch(PROCESS_URL, {method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},
+      body: JSON.stringify(payload)});
+  }).then(function(r){
+    if(!r.ok) return null;
+    return r.blob();
+  }).then(function(blob){
+    if(!blob) return null;
+    return new Promise(function(resolve){
+      var url = URL.createObjectURL(blob), img = new Image();
+      img.onload = function(){
+        var cv = document.createElement('canvas');
+        cv.width = 160; cv.height = 160;
+        var cx = cv.getContext('2d');
+        cx.drawImage(img, 0, 0);
+        var px = cx.getImageData(0, 0, 160, 160).data;
+        var sum = 0, n = 0, dense = 0;
+        for(var p = 0; p < px.length; p += 4){
+          if(px[p+3] === 0) continue;
+          var v = px[p]/127.5 - 1;
+          sum += v; n++;
+          if(v >= 0.30) dense++;
+        }
+        URL.revokeObjectURL(url);
+        resolve(n < 50 ? null : {dense: dense/n, mean: sum/n});
+      };
+      img.onerror = function(){ URL.revokeObjectURL(url); resolve(null); };
+      img.src = url;
+    });
+  }).catch(function(){ return null; });
+}
+
+function runTrend(){
+  if(!creds()){ openKeys(); return; }
+  var btn = document.getElementById('trendRun');
+  var note = document.getElementById('trendnote');
+  var bounds = map.getBounds();
+  var years = [];
+  for(var y = 2017; y <= new Date().getFullYear(); y++) years.push(y);
+
+  btn.disabled = true;
+  trendData = [];
+  var i = 0;
+
+  function step(){
+    if(i >= years.length){
+      btn.disabled = false;
+      btn.textContent = 'Измерить заново';
+      setProgress(-1);
+      finishTrend();
+      return;
+    }
+    var yr = years[i];
+    btn.textContent = yr + '…';
+    note.textContent = 'Снимаю ' + yr + ' год, осталось ' + (years.length - i) + '.';
+    setProgress(Math.round(100 * i / years.length), 'Снимаю ' + yr + ' год — осталось ' + (years.length - i) + '…');
+    measureYear(yr, bounds).then(function(res){
+      if(res) trendData.push({year: yr, dense: res.dense, mean: res.mean});
+      i++;
+      step();
+    });
+  }
+  step();
+}
+
+function finishTrend(){
+  var note = document.getElementById('trendnote');
+  if(trendData.length < 3){
+    note.textContent = 'Удалось получить только ' + trendData.length +
+      ' кадров — в остальные годы мешали облака. Попробуйте другой участок или повторите.';
+    return;
+  }
+  trendData.sort(function(a, b){ return a.year - b.year; });
+
+  var first = trendData[0], last = trendData[trendData.length - 1];
+  var span = last.year - first.year;
+  var perYear = span ? ((last.dense - first.dense) * 100 / span) : 0;
+
+  setStats('trendstats', [
+    [trendData.length, 'лет измерено'],
+    [Math.round(first.dense*100) + '%', 'было в ' + first.year],
+    [Math.round(last.dense*100) + '%', 'стало в ' + last.year],
+    [(perYear >= 0 ? '+' : '') + perYear.toFixed(1) + ' п.п.', 'тренд за год']
+  ]);
+
+  document.getElementById('trendFig').hidden = false;
+  drawTrendChart(trendData);
+
+  var dir = perYear > 0.3 ? 'зелени становится больше'
+          : perYear < -0.3 ? 'зелень уходит'
+          : 'картина почти не меняется';
+  note.textContent = 'За ' + span + ' лет ' + dir + ': с ' + Math.round(first.dense*100) +
+    '% до ' + Math.round(last.dense*100) + '%. Важно: год на год не приходится — ' +
+    'сухое лето занижает показатель, так что судить стоит по общему наклону, а не по двум точкам.';
+}
+
+function drawTrendChart(data){
+  var svg = document.getElementById('trendChart');
+  var W = 560, H = 240, mL = 42, mR = 46, mT = 14, mB = 30;
+  var pw = W - mL - mR, ph = H - mT - mB;
+  var vals = data.map(function(d){ return d.dense * 100; });
+  var vmax = Math.max(60, Math.ceil(Math.max.apply(null, vals) / 10) * 10 + 5);
+  var vmin = 0;
+
+  function X(i){ return mL + (data.length === 1 ? pw/2 : pw * i / (data.length - 1)); }
+  function Y(v){ return mT + ph - ph * (v - vmin) / (vmax - vmin); }
+
+  var out = [];
+  /* сетка и подписи оси Y */
+  for(var g = 0; g <= vmax; g += 20){
+    out.push('<line class="grid-line" x1="'+mL+'" y1="'+Y(g).toFixed(1)+'" x2="'+(mL+pw)+'" y2="'+Y(g).toFixed(1)+'"/>');
+    out.push('<text class="axis-text tabular" x="'+(mL-8)+'" y="'+(Y(g)+4).toFixed(1)+'" text-anchor="end">'+g+'%</text>');
+  }
+  /* подписи оси X — не каждый год, чтобы не слиплись */
+  var stepX = data.length > 7 ? 2 : 1;
+  data.forEach(function(d, i){
+    if(i % stepX !== 0 && i !== data.length - 1) return;
+    out.push('<text class="axis-text tabular" x="'+X(i).toFixed(1)+'" y="'+(H-10)+'" text-anchor="middle">'+d.year+'</text>');
   });
-  ['green','ndvi','deficit','mine','ai','species'].forEach(function(nm){
-    document.getElementById('tab-'+nm).hidden = (nm !== 'ndvi');
+
+  var pts = data.map(function(d, i){ return X(i).toFixed(1) + ',' + Y(d.dense*100).toFixed(1); });
+  out.push('<path class="series-area" d="M'+mL+','+Y(vmin)+' L'+pts.join(' L')+' L'+(mL+pw)+','+Y(vmin)+' Z"/>');
+  out.push('<polyline class="series-line" points="'+pts.join(' ')+'"/>');
+  data.forEach(function(d, i){
+    out.push('<circle class="series-dot" cx="'+X(i).toFixed(1)+'" cy="'+Y(d.dense*100).toFixed(1)+
+      '" r="4.5" data-i="'+i+'"/>');
   });
-  document.getElementById('sheet').classList.remove('collapsed');
-  loadNDVI();
-});
+  /* подпись только последней точки */
+  var li = data.length - 1;
+  out.push('<text class="end-label" x="'+(X(li)+9).toFixed(1)+'" y="'+(Y(data[li].dense*100)+4).toFixed(1)+
+    '">'+Math.round(data[li].dense*100)+'%</text>');
+
+  svg.innerHTML = out.join('');
+
+  /* подсказка при наведении и касании */
+  var tip = document.getElementById('trendTip');
+  var host = svg.parentNode;
+  function show(ev){
+    var c = ev.target.closest('circle[data-i]');
+    if(!c){ tip.hidden = true; return; }
+    var d = data[parseInt(c.dataset.i, 10)];
+    var box = host.getBoundingClientRect(), cb = c.getBoundingClientRect();
+    tip.hidden = false;
+    tip.textContent = d.year + ': ' + Math.round(d.dense*100) + '% · NDVI ' + d.mean.toFixed(2);
+    tip.style.left = (cb.left - box.left + cb.width/2) + 'px';
+    tip.style.top  = (cb.top - box.top) + 'px';
+  }
+  svg.addEventListener('mousemove', show);
+  svg.addEventListener('touchstart', show, {passive:true});
+  svg.addEventListener('mouseleave', function(){ tip.hidden = true; });
+}
+
+document.getElementById('trendRun').addEventListener('click', runTrend);
+
+/* ================= Климат: ветер и солнце ================= */
+var DIRS = ['С','СВ','В','ЮВ','Ю','ЮЗ','З','СЗ'];
+var DIR_FULL = ['севера','северо-востока','востока','юго-востока','юга','юго-запада','запада','северо-запада'];
+
+function runClimate(){
+  var btn = document.getElementById('climRun');
+  btn.disabled = true; btn.textContent = 'Считаю…';
+  var c = map.getBounds().getCenter();
+  var end = new Date(Date.now() - 7*864e5).toISOString().slice(0,10);
+  var start = new Date(Date.now() - 3*365*864e5).toISOString().slice(0,10);
+  var url = 'https://archive-api.open-meteo.com/v1/archive?latitude=' + c.lat.toFixed(3) +
+    '&longitude=' + c.lng.toFixed(3) + '&start_date=' + start + '&end_date=' + end +
+    '&daily=wind_speed_10m_max,wind_direction_10m_dominant&timezone=auto';
+
+  fetch(url).catch(function(){
+    throw new Error('Архив погоды не ответил — проверьте интернет.');
+  }).then(function(r){
+    if(!r.ok) throw new Error('Архив погоды: HTTP ' + r.status);
+    return r.json();
+  }).then(function(j){
+    var d = j.daily || {};
+    var deg = d.wind_direction_10m_dominant || [], spd = d.wind_speed_10m_max || [];
+    var bins = [0,0,0,0,0,0,0,0], n = 0, sum = 0, windy = 0;
+
+    for(var i = 0; i < deg.length; i++){
+      if(deg[i] === null || spd[i] === null) continue;
+      /* 0° = ветер ИЗ севера; сектор 45°, север от 337.5 до 22.5 */
+      var b = Math.round(deg[i] / 45) % 8;
+      bins[b]++; n++;
+      sum += spd[i];
+      if(spd[i] >= 10) windy++;
+    }
+    if(!n) throw new Error('В архиве нет данных по этой точке.');
+
+    var top = 0;
+    for(var k = 1; k < 8; k++) if(bins[k] > bins[top]) top = k;
+    var avg = sum / n;
+    var windyPct = Math.round(100 * windy / n);
+    /* высота солнца в полдень 21 июня на широте φ: 90 − φ + 23.44 */
+    var noonSun = Math.round(90 - c.lat + 23.44);
+
+    setStats('climstats', [
+      [DIRS[top], 'главный ветер'],
+      [avg.toFixed(1) + ' м/с', 'средняя скорость'],
+      [windyPct + '%', 'дней с ветром 10+'],
+      [noonSun + '°', 'солнце в полдень']
+    ]);
+
+    document.getElementById('windFig').hidden = false;
+    drawWindRose(bins, n);
+    writeClimateAdvice(top, avg, windyPct, noonSun, c.lat);
+
+    btn.disabled = false; btn.textContent = 'Пересчитать';
+    toast('Климат разобран');
+  }).catch(function(err){
+    btn.disabled = false; btn.textContent = 'Разобрать климат';
+    toast(err.message.slice(0, 50));
+  });
+}
+
+function drawWindRose(bins, n){
+  var svg = document.getElementById('windRose');
+  var cx = 150, cy = 150, rMax = 108;
+  var max = Math.max.apply(null, bins) || 1;
+  var out = [];
+
+  /* кольца сетки с подписями долей */
+  [0.33, 0.66, 1].forEach(function(f){
+    out.push('<circle class="grid-line" fill="none" cx="'+cx+'" cy="'+cy+'" r="'+(rMax*f).toFixed(1)+'"/>');
+  });
+  out.push('<text class="axis-text tabular" x="'+cx+'" y="'+(cy - rMax - 6)+'" text-anchor="middle">'+
+    Math.round(100*max/n)+'%</text>');
+
+  /* сектор = один хью, насыщенность по величине (последовательная шкала) */
+  bins.forEach(function(v, i){
+    var frac = v / max;
+    var r = 10 + (rMax - 10) * frac;
+    var a0 = (i*45 - 22.5 - 90) * Math.PI/180;
+    var a1 = (i*45 + 22.5 - 90) * Math.PI/180;
+    var x0 = cx + r*Math.cos(a0), y0 = cy + r*Math.sin(a0);
+    var x1 = cx + r*Math.cos(a1), y1 = cy + r*Math.sin(a1);
+    var op = (0.25 + 0.65*frac).toFixed(2);
+    out.push('<path d="M'+cx+','+cy+' L'+x0.toFixed(1)+','+y0.toFixed(1)+
+      ' A'+r.toFixed(1)+','+r.toFixed(1)+' 0 0 1 '+x1.toFixed(1)+','+y1.toFixed(1)+' Z" ' +
+      'fill="var(--accent)" fill-opacity="'+op+'" stroke="var(--surface)" stroke-width="2"/>');
+  });
+
+  /* подписи направлений */
+  DIRS.forEach(function(lbl, i){
+    var a = (i*45 - 90) * Math.PI/180;
+    var rr = rMax + 20;
+    out.push('<text class="axis-text" x="'+(cx + rr*Math.cos(a)).toFixed(1)+'" y="'+
+      (cy + rr*Math.sin(a) + 4).toFixed(1)+'" text-anchor="middle">'+lbl+'</text>');
+  });
+
+  svg.innerHTML = out.join('');
+}
+
+function writeClimateAdvice(top, avg, windyPct, noonSun, lat){
+  var box = document.getElementById('climAdvice');
+  box.hidden = false;
+  box.innerHTML = '';
+
+  var shelterDir = DIRS[(top + 2) % 8] + '–' + DIRS[(top + 6) % 8];
+  var lines = [
+    '## Ветер',
+    'Чаще всего дует с ' + DIR_FULL[top] + ', средняя скорость ' + avg.toFixed(1) +
+      ' м/с, в ' + windyPct + '% дней порывы от 10 м/с.',
+    'Защитные полосы ставят **поперёк** главного ветра — то есть вытянутыми по линии ' +
+      shelterDir + '. Между промзоной и жильём это снижает перенос пыли и выбросов.',
+    'На открытых местах саженцу нужна опора и обмотка ствола: при таком ветре молодое дерево расшатывает и сушит.',
+    '## Солнце',
+    'В полдень 21 июня солнце поднимается на ' + noonSun + '° — высоко, тень от дерева короткая и падает почти под крону.',
+    'Отсюда правило: сажать с **южной и юго-западной стороны** домов, площадок и парковок. ' +
+      'Юго-запад важнее юга: самая жара наступает после полудня, когда солнце уже сместилось на запад.',
+    'С северной стороны дерево тени не даёт и само растёт хуже — там лучше кустарник.',
+    '## Что это значит для плана',
+    'Приоритет посадок: сначала южные и юго-западные стороны детских площадок, школьных дворов и парковок, ' +
+      'потом защитные полосы поперёк главного ветра, и только затем декоративное озеленение.'
+  ].join('\n');
+
+  box.appendChild(renderReport(lines));
+}
+
+document.getElementById('climRun').addEventListener('click', runClimate);
+
+/* ================= Полив: прогноз погоды и маршрут ================= */
+var routeLayer = L.layerGroup().addTo(map);
+var weather = null;   /* {rain7, tmax, days} */
+var waterPlan = [];   /* [{tree, liters}] */
+
+/* Засухоустойчивость: 1 — терпит засуху, 3 — требует много воды */
+var THIRST = [
+  [/карагач|вяз/i,        1.0],
+  [/лох|джида/i,          0.8],
+  [/ясень/i,              1.1],
+  [/сосна/i,              1.0],
+  [/ель/i,                1.2],
+  [/яблоня|ранетк/i,      1.3],
+  [/рябина/i,             1.3],
+  [/тополь/i,             1.5],
+  [/берёз|береза/i,       1.6],
+  [/клён|клен/i,          1.2]
+];
+function thirstOf(species){
+  for(var i=0;i<THIRST.length;i++) if(THIRST[i][0].test(species)) return THIRST[i][1];
+  return 1.2;
+}
+
+function fetchWeather(){
+  var c = map.getBounds().getCenter();
+  var url = 'https://api.open-meteo.com/v1/forecast?latitude=' + c.lat.toFixed(3) +
+            '&longitude=' + c.lng.toFixed(3) +
+            '&daily=precipitation_sum,temperature_2m_max&forecast_days=7&past_days=7&timezone=auto';
+  return fetch(url).catch(function(){
+    throw new Error('Прогноз погоды не загрузился — проверьте интернет.');
+  }).then(function(r){
+    if(!r.ok) throw new Error('Погода: HTTP ' + r.status);
+    return r.json();
+  }).then(function(j){
+    var d = j.daily || {};
+    var prec = d.precipitation_sum || [], tmax = d.temperature_2m_max || [];
+    /* первые 7 значений — прошедшая неделя, дальше прогноз */
+    var past = prec.slice(0, 7).reduce(function(a, b){ return a + (b || 0); }, 0);
+    var next = prec.slice(7).reduce(function(a, b){ return a + (b || 0); }, 0);
+    var hot = Math.max.apply(null, tmax.slice(7).filter(function(v){ return v !== null; }).concat([-99]));
+    weather = {rainPast: past, rainNext: next, tmax: hot, raw: d};
+    return weather;
+  });
+}
+
+function calcWatering(){
+  var btn = document.getElementById('waterCalc');
+  btn.disabled = true; btn.textContent = 'Считаю…';
+
+  fetchWeather().then(function(w){
+    var month = new Date().getMonth() + 1;
+    waterPlan = [];
+
+    mine.forEach(function(t){
+      var ageY = (Date.now() - t.ts) / 864e5 / 365;
+      /* взрослому дереву полив нужен только в сильную жару */
+      var young = ageY < 3;
+      var need = 0;
+
+      if(month >= 5 && month <= 8){
+        need = young ? 30 : (w.tmax >= 32 ? 20 : 0);
+      } else if(month === 9 || month === 10){
+        need = young ? 40 : 30;           /* влагозарядковый */
+      } else if(month === 4){
+        need = young ? 25 : 0;
+      }
+
+      if(!need) return;
+      need = Math.round(need * thirstOf(t.species));
+
+      /* дождь прошедшей недели засчитывается */
+      if(w.rainPast >= 15) need = 0;
+      else if(w.rainPast >= 8) need = Math.round(need * 0.5);
+      /* обещанный дождь — тоже */
+      if(w.rainNext >= 12) need = Math.round(need * 0.4);
+      /* жара — наоборот */
+      if(w.tmax >= 35) need = Math.round(need * 1.3);
+
+      if(need > 0) waterPlan.push({tree: t, liters: need});
+    });
+
+    waterPlan.sort(function(a, b){ return b.liters - a.liters; });
+
+    var total = waterPlan.reduce(function(s, x){ return s + x.liters; }, 0);
+    setStats('waterstats', [
+      [waterPlan.length, 'нужен полив'],
+      [total, 'литров всего'],
+      [Math.round(w.rainPast) + ' мм', 'дождь за 7 дней'],
+      [(w.tmax > -99 ? Math.round(w.tmax) : '—') + '°', 'макс. температура']
+    ]);
+
+    var tb = document.getElementById('waterList');
+    tb.innerHTML = '';
+    if(!mine.length){
+      tb.innerHTML = '<tr><td colspan="3" style="color:var(--muted);border:none">' +
+        'Сначала отметьте деревья на карте кнопкой «+ Дерево».</td></tr>';
+    } else if(!waterPlan.length){
+      tb.innerHTML = '<tr><td colspan="3" style="color:var(--muted);border:none">' +
+        'Полив сейчас не нужен: ' + (w.rainPast >= 8 ? 'на неделе был дождь ' + Math.round(w.rainPast) + ' мм.'
+        : 'не сезон либо деревья взрослые.') + '</td></tr>';
+    } else {
+      waterPlan.forEach(function(x, i){
+        var tr = document.createElement('tr');
+        tr.innerHTML = '<td class="num">' + (i+1) + '</td><td>' + escapeHtml(x.tree.species) +
+          '<br><span style="color:var(--muted);font-size:12px">' + STATE[x.tree.state].label + '</span></td>' +
+          '<td class="num">' + x.liters + ' л</td>';
+        tb.appendChild(tr);
+      });
+    }
+
+    document.getElementById('waternote').textContent =
+      'Прогноз на ' + new Date().toLocaleDateString('ru-RU') + ': за прошедшую неделю выпало ' +
+      Math.round(w.rainPast) + ' мм, на ближайшую неделю ожидается ' + Math.round(w.rainNext) +
+      ' мм, максимум ' + (w.tmax > -99 ? Math.round(w.tmax) : '—') + '°. ' +
+      (w.rainPast >= 15 ? 'Дождя достаточно — полив можно пропустить.'
+       : w.tmax >= 35 ? 'Жара: поливать чаще обычного.'
+       : 'Режим обычный.');
+
+    btn.disabled = false; btn.textContent = 'Пересчитать';
+    toast('Расчёт готов');
+  }).catch(function(err){
+    btn.disabled = false; btn.textContent = 'Рассчитать по погоде';
+    document.getElementById('waternote').textContent = err.message;
+    toast('Ошибка погоды');
+  });
+}
+
+/* Маршрут обхода: ближайший сосед от первой точки */
+function buildRoute(){
+  routeLayer.clearLayers();
+  if(waterPlan.length < 2){ toast('Нужно минимум два дерева'); return; }
+
+  var pts = waterPlan.map(function(x){ return x.tree; });
+  var left = pts.slice(1), cur = pts[0], order = [cur];
+  while(left.length){
+    var best = 0, bd = Infinity;
+    for(var i=0;i<left.length;i++){
+      var d = dist(cur, left[i]);
+      if(d < bd){ bd = d; best = i; }
+    }
+    cur = left.splice(best, 1)[0];
+    order.push(cur);
+  }
+
+  var latlngs = order.map(function(t){ return [t.lat, t.lon]; });
+  L.polyline(latlngs, {color:'#2f7d4f', weight:3, opacity:.85, dashArray:'6,5'}).addTo(routeLayer);
+  order.forEach(function(t, i){
+    L.marker([t.lat, t.lon], {icon: L.divIcon({
+      className:'', html:'<div class="route-badge">' + (i+1) + '</div>', iconSize:[22,22]
+    })}).addTo(routeLayer);
+  });
+
+  var km = 0;
+  for(var j=1;j<order.length;j++) km += dist(order[j-1], order[j]);
+  map.fitBounds(L.latLngBounds(latlngs).pad(0.25));
+  toast('Маршрут: ' + order.length + ' деревьев, ' + (km/1000).toFixed(2) + ' км');
+}
+function dist(a, b){
+  var dx = (b.lon - a.lon) * RAD * R * Math.cos(a.lat * RAD);
+  var dy = (b.lat - a.lat) * RAD * R;
+  return Math.sqrt(dx*dx + dy*dy);
+}
+
+document.getElementById('waterCalc').addEventListener('click', calcWatering);
+document.getElementById('routeBtn').addEventListener('click', buildRoute);
 
 /* ================= Ассистент (DeepSeek) ================= */
 var DS_URL = 'https://api.deepseek.com/chat/completions';
@@ -1242,6 +1907,125 @@ function ask(question){
   });
 }
 
+/* ================= Заключение по участку ================= */
+var REPORT_PROMPT = [
+'Подготовь заключение по озеленению участка для акимата и потенциального инвестора.',
+'Строго по этой структуре, без вступлений и без воды:',
+'',
+'## Участок',
+'Где это, какая площадь в окне, что показали данные. Две-три фразы.',
+'',
+'## Что не так',
+'Главная проблема участка, опираясь на цифры NDVI и дефицита. Две-три фразы.',
+'',
+'## Что сажать',
+'3-4 породы под этот участок с количеством саженцев. Для каждой — одна строка почему именно она.',
+'',
+'## Сколько стоит',
+'Прикинь: саженцы (крупномер 15-25 тыс тенге, стандартный 3-6 тыс), посадка,',
+'полив первые три года. Дай вилку в тенге и скажи, что это оценка.',
+'',
+'## Что это даст',
+'Поглощение CO2 в тоннах в год, площадь тени, снижение температуры летом,',
+'задержка пыли. Считай по взрослому дереву: 20-30 кг CO2 в год, 30-50 кв.м тени.',
+'',
+'## Риски',
+'Два-три риска честно: приживаемость, полив, реагенты, вандализм.',
+'',
+'Пиши конкретно и по-деловому. Числа округляй. Если данных не хватает — скажи, каких именно.'
+].join('\n');
+
+var lastReport = '';
+
+document.getElementById('repBtn').addEventListener('click', function(){
+  var key = dsKey();
+  if(!key){
+    toast('Нужен ключ DeepSeek');
+    openKeys();
+    return;
+  }
+  var btn = this;
+  var out = document.getElementById('repOut');
+  btn.disabled = true; btn.textContent = 'Готовлю…';
+  out.hidden = false;
+  out.textContent = 'Собираю данные и считаю…';
+
+  fetch(DS_URL, {
+    method:'POST',
+    headers:{'Content-Type':'application/json', 'Authorization':'Bearer '+key},
+    body: JSON.stringify({model:'deepseek-chat', messages:[
+      {role:'system', content: SYSTEM_PROMPT},
+      {role:'system', content: screenContext()},
+      {role:'user', content: REPORT_PROMPT}
+    ], temperature:0.3, max_tokens:1600})
+  }).catch(function(){
+    throw new Error('Запрос не дошёл. Проверьте интернет.');
+  }).then(function(r){
+    if(r.status === 401) throw new Error('Ключ DeepSeek отклонён.');
+    if(!r.ok) throw new Error('DeepSeek: HTTP ' + r.status);
+    return r.json();
+  }).then(function(j){
+    var txt = j.choices[0].message.content;
+    lastReport = txt;
+    out.innerHTML = '';
+    out.appendChild(renderReport(txt));
+    document.getElementById('repCopy').hidden = false;
+    btn.disabled = false; btn.textContent = 'Пересобрать';
+  }).catch(function(err){
+    out.textContent = err.message;
+    btn.disabled = false; btn.textContent = 'Подготовить заключение';
+  });
+});
+
+function renderReport(text){
+  var frag = document.createDocumentFragment();
+  text.split('\n').forEach(function(line){
+    var t = line.trim();
+    if(!t) return;
+    if(/^#{1,3}\s/.test(t)){
+      var h = document.createElement('h3');
+      h.textContent = t.replace(/^#{1,3}\s*/, '');
+      frag.appendChild(h);
+    } else if(/^\s*[-*•]\s+/.test(t)){
+      var li = document.createElement('div');
+      li.style.paddingLeft = '14px';
+      li.style.marginBottom = '4px';
+      li.style.textIndent = '-10px';
+      inlineMd('• ' + t.replace(/^\s*[-*•]\s+/, ''), li);
+      frag.appendChild(li);
+    } else {
+      var p = document.createElement('div');
+      p.style.marginBottom = '6px';
+      inlineMd(t, p);
+      frag.appendChild(p);
+    }
+  });
+  return frag;
+}
+
+document.getElementById('repCopy').addEventListener('click', function(){
+  var btn = this;
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(lastReport).then(function(){
+      btn.textContent = 'Скопировано';
+      setTimeout(function(){ btn.textContent = 'Скопировать'; }, 2000);
+    }).catch(function(){
+      selectText(document.getElementById('repOut'));
+      toast('Выделено — скопируйте вручную');
+    });
+  } else {
+    selectText(document.getElementById('repOut'));
+    toast('Выделено — скопируйте вручную');
+  }
+});
+function selectText(el){
+  var r = document.createRange();
+  r.selectNodeContents(el);
+  var s = window.getSelection();
+  s.removeAllRanges();
+  s.addRange(r);
+}
+
 document.getElementById('chatForm').addEventListener('submit', function(e){
   e.preventDefault();
   var inp = document.getElementById('chatInput');
@@ -1254,29 +2038,124 @@ document.getElementById('chips').addEventListener('click', function(e){
   if(c) ask(c.textContent);
 });
 
-/* ================= Свои деревья ================= */
+/* ================= Общая база деревьев (Supabase) ================= */
+var SB_URL = 'https://pbrfnepcjfzrlnlmgkpe.supabase.co';
+var SB_KEY = 'sb_publishable_wodfqBfmRRCWqFbmH_TskA_564HtKHm';
+
+function sbHeaders(extra){
+  var h = {'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY};
+  if(extra) for(var k in extra) h[k] = extra[k];
+  return h;
+}
+function sbGet(path){
+  return fetch(SB_URL + '/rest/v1/' + path, {headers: sbHeaders()})
+    .catch(function(){ throw new Error('База не отвечает — проверьте интернет.'); })
+    .then(function(r){
+      if(!r.ok) return r.text().then(function(t){
+        throw new Error('База: HTTP ' + r.status + ' ' + t.slice(0, 120));
+      });
+      return r.json();
+    });
+}
+function sbPost(path, body){
+  return fetch(SB_URL + '/rest/v1/' + path, {
+    method: 'POST',
+    headers: sbHeaders({'Content-Type':'application/json', 'Prefer':'return=representation'}),
+    body: JSON.stringify(body)
+  }).catch(function(){ throw new Error('База не отвечает — проверьте интернет.'); })
+    .then(function(r){
+      if(!r.ok) return r.text().then(function(t){
+        throw new Error('Запись не прошла: HTTP ' + r.status + ' ' + t.slice(0, 140));
+      });
+      return r.json();
+    });
+}
+
+/* Строка из базы -> объект, с которым работает карта */
+function rowToTree(r){
+  return {
+    id: r.id, lat: r.lat, lon: r.lon,
+    species: r.species, state: r.state || 'ok',
+    note: r.note || '', photo: r.photo || null,
+    district: r.district || '', school: r.school || '', sponsor: r.sponsor || '',
+    ts: r.planted_at ? Date.parse(r.planted_at) : Date.parse(r.created_at),
+    lastWater: null, waterCount: 0
+  };
+}
+
 var STATE = {ok:{label:'🟢 Норм', color:'#2f9e5e'},
              care:{label:'🟡 Нужен уход', color:'#c98a16'},
              bad:{label:'🔴 Аварийное', color:'#c0392b'}};
 var mine = [];
-try { mine = JSON.parse(localStorage.getItem('pvl_trees') || '[]'); } catch(e){ mine = []; }
-function persist(){ try { localStorage.setItem('pvl_trees', JSON.stringify(mine)); } catch(e){} }
+var dbReady = false;
+
+function loadTrees(){
+  return sbGet('trees?select=*&order=created_at.desc&limit=2000').then(function(rows){
+    mine = rows.map(rowToTree);
+    dbReady = true;
+    return sbGet('waterings?select=tree_id,at&order=at.desc&limit=5000');
+  }).then(function(ws){
+    var seen = {};
+    ws.forEach(function(w){
+      if(!seen[w.tree_id]) seen[w.tree_id] = w.at;
+    });
+    var counts = {};
+    ws.forEach(function(w){ counts[w.tree_id] = (counts[w.tree_id] || 0) + 1; });
+    mine.forEach(function(t){
+      if(seen[t.id]) t.lastWater = Date.parse(seen[t.id]);
+      t.waterCount = counts[t.id] || 0;
+    });
+    drawMine();
+    openFromHash();
+    var n = document.getElementById('minenote');
+    if(n) n.textContent = 'База подключена: ' + mine.length +
+      ' деревьев, их видит каждый, кто открыл ссылку. Жёлтый пульс на карте — саженцу пора пить.';
+  }).catch(function(err){
+    dbReady = false;
+    drawMine();
+    var n = document.getElementById('minenote');
+    if(n) n.textContent = 'База не отвечает: ' + err.message +
+      ' Карта и спутник работают, но деревья не сохранятся.';
+    toast('База: ' + err.message.slice(0, 44));
+  });
+}
+
+function persist(){ /* данные живут в базе, локально ничего не храним */ }
+
+/* Нужен ли полив прямо сейчас — для «мигания» на карте */
+function thirstyNow(t){
+  var m = new Date().getMonth() + 1;
+  if(m < 4 || m > 10) return false;                       /* не сезон */
+  var ageY = (Date.now() - t.ts) / 864e5 / 365;
+  if(ageY > 3) return false;                              /* взрослое справляется само */
+  if(!t.lastWater) return true;                           /* ни разу не поливали */
+  return (Date.now() - t.lastWater) / 864e5 > 7;          /* больше недели назад */
+}
 
 function drawMine(){
   mineLayer.clearLayers();
   mine.forEach(function(t, idx){
+    var thirsty = thirstyNow(t);
     var html = '<b>'+escapeHtml(t.species)+'</b>'+STATE[t.state].label +
+      (thirsty ? '<br><b style="color:#c98a16">Нужен полив</b>' : '') +
       (t.note ? '<br>'+escapeHtml(t.note) : '') +
-      '<br><span style="opacity:.6">'+t.lat.toFixed(5)+', '+t.lon.toFixed(5)+'</span>' +
+      (t.school ? '<br>Шеф: '+escapeHtml(t.school) : '') +
+      '<br><span style="opacity:.6">№'+t.id+' · '+t.lat.toFixed(5)+', '+t.lon.toFixed(5)+'</span>' +
       '<br><a href="#" data-qr="'+idx+'" style="color:#2f7d4f;font-weight:600">Паспорт и QR →</a>';
+
+    if(thirsty){
+      L.circleMarker([t.lat, t.lon], {radius:13, weight:0,
+        fillColor:'#c98a16', fillOpacity:.28, className:'pulse'}).addTo(mineLayer);
+    }
     L.circleMarker([t.lat, t.lon], {radius:7, weight:2, color:'#fff',
       fillColor:STATE[t.state].color, fillOpacity:1})
       .bindPopup(html)
       .addTo(mineLayer);
   });
   var c = {ok:0, care:0, bad:0};
-  mine.forEach(function(t){ c[t.state]++; });
+  mine.forEach(function(t){ if(c[t.state] !== undefined) c[t.state]++; });
   setStats('mystats', [[mine.length,'всего'],[c.ok,'норм'],[c.care,'нужен уход'],[c.bad,'аварийные']]);
+  drawRating();
   var tb = document.getElementById('mylist');
   tb.innerHTML = '';
   mine.slice().reverse().slice(0,40).forEach(function(t){
@@ -1424,6 +2303,45 @@ document.getElementById('photoInput').addEventListener('change', function(e){
   });
 });
 
+function drawRating(){
+  var schools = {}, waters = 0, thirsty = 0;
+  mine.forEach(function(t){
+    waters += (t.waterCount || 0);
+    if(thirstyNow(t)) thirsty++;
+    var s = (t.school || '').trim();
+    if(!s) return;
+    if(!schools[s]) schools[s] = {trees:0, waters:0};
+    schools[s].trees++;
+    schools[s].waters += (t.waterCount || 0);
+  });
+  var names = Object.keys(schools);
+  setStats('ratestats', [
+    [mine.length, 'деревьев в базе'],
+    [names.length, 'школ-шефов'],
+    [waters, 'поливов всего'],
+    [thirsty, 'ждут полива']
+  ]);
+
+  var tb = document.getElementById('rateList');
+  if(!tb) return;
+  if(!names.length){
+    tb.innerHTML = '<tr><td colspan="3" style="color:var(--muted);border:none">' +
+      'Пока никто не взял шефство. Укажите школу при добавлении дерева.</td></tr>';
+    return;
+  }
+  names.sort(function(a, b){
+    return (schools[b].waters - schools[a].waters) || (schools[b].trees - schools[a].trees);
+  });
+  tb.innerHTML = '';
+  names.forEach(function(n, i){
+    var tr = document.createElement('tr');
+    tr.innerHTML = '<td>' + (i === 0 ? '🏆 ' : '') + escapeHtml(n) + '</td>' +
+      '<td class="num">' + schools[n].trees + '</td>' +
+      '<td class="num">' + schools[n].waters + '</td>';
+    tb.appendChild(tr);
+  });
+}
+
 var addMode = false, pending = null;
 var addBtn = document.getElementById('addmode');
 addBtn.addEventListener('click', function(){
@@ -1458,10 +2376,24 @@ document.getElementById('stateSeg').addEventListener('click', function(ev){
 });
 dlg.addEventListener('close', function(){
   if(dlg.returnValue === 'save' && pending){
-    mine.push({id: nextId(), lat:pending.lat, lon:pending.lon, species:spSel.value,
-      state:chosenState, note:document.getElementById('note').value.trim(),
-      photo: pendingPhoto, ts:Date.now()});
-    persist(); drawMine(); toast('Дерево добавлено');
+    var row = {
+      lat: pending.lat, lon: pending.lon,
+      species: spSel.value, state: chosenState,
+      note: document.getElementById('note').value.trim() || null,
+      photo: pendingPhoto,
+      school: (document.getElementById('school').value || '').trim() || null,
+      sponsor: (document.getElementById('sponsor').value || '').trim() || null,
+      planted_at: new Date().toISOString().slice(0, 10)
+    };
+    toast('Сохраняю…');
+    sbPost('trees', row).then(function(res){
+      var t = rowToTree(res[0]);
+      mine.unshift(t);
+      drawMine();
+      toast('Дерево №' + t.id + ' в общей базе');
+    }).catch(function(err){
+      toast(err.message.slice(0, 60));
+    });
   }
   pending = null;
   pendingPhoto = null;
@@ -1473,11 +2405,6 @@ dlg.addEventListener('close', function(){
   document.getElementById('photoInput').value = '';
 });
 
-function nextId(){
-  var max = 0;
-  mine.forEach(function(t){ if(t.id && t.id > max) max = t.id; });
-  return max + 1;
-}
 
 /* ================= Паспорт дерева и QR ================= */
 var qrDlg = document.getElementById('qrDlg');
@@ -1515,13 +2442,18 @@ function openPassport(t){
   hd.appendChild(s);
   card.appendChild(hd);
 
+  var waterLine = t.lastWater
+    ? new Date(t.lastWater).toLocaleDateString('ru-RU') + ' (всего поливов: ' + (t.waterCount || 1) + ')'
+    : 'записей нет';
+
   var dl = document.createElement('dl');
   [['Состояние', STATE[t.state].label],
-   ['Отмечено', new Date(t.ts).toLocaleDateString('ru-RU')],
+   ['Посажено', new Date(t.ts).toLocaleDateString('ru-RU')],
    ['Координаты', t.lat.toFixed(5) + ', ' + t.lon.toFixed(5)],
    ['Уход сейчас', wateringAdvice(t)],
-   ['Финансирование', 'городской бюджет'],
-   ['Ответственный', 'КСК / акимат района']
+   ['Последний полив', waterLine],
+   ['Кто посадил', t.sponsor || 'не указано'],
+   ['Школа-шеф', t.school || 'не закреплена']
   ].concat(t.note ? [['Заметка', t.note]] : []).forEach(function(row){
     var dt = document.createElement('dt'); dt.textContent = row[0];
     var dd = document.createElement('dd'); dd.textContent = row[1];
@@ -1536,10 +2468,60 @@ function openPassport(t){
     card.appendChild(img);
   }
 
-  var url = location.origin + location.pathname + '#tree' + (t.id || 1);
+  var url = location.origin + location.pathname + '#tree' + t.id;
   drawQR(document.getElementById('qrCanvas'), url);
+
+  var act = document.getElementById('qrActions');
+  act.innerHTML = '';
+  var btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'btn primary';
+  btn.textContent = '💧 Отметить полив';
+  btn.addEventListener('click', function(){
+    btn.disabled = true; btn.textContent = 'Записываю…';
+    sbPost('waterings', {tree_id: t.id, liters: 30, by_whom: 'через карту'})
+      .then(function(){
+        t.lastWater = Date.now();
+        t.waterCount = (t.waterCount || 0) + 1;
+        btn.textContent = '✓ Полив записан';
+        drawMine();
+        setTimeout(function(){ openPassport(t); }, 700);
+      }).catch(function(e){
+        btn.disabled = false; btn.textContent = '💧 Отметить полив';
+        toast(e.message.slice(0, 50));
+      });
+  });
+  act.appendChild(btn);
+
+  var link = document.createElement('button');
+  link.type = 'button';
+  link.className = 'btn';
+  link.textContent = 'Скопировать ссылку';
+  link.addEventListener('click', function(){
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(url).then(function(){
+        link.textContent = 'Скопировано';
+        setTimeout(function(){ link.textContent = 'Скопировать ссылку'; }, 1800);
+      }).catch(function(){ toast(url); });
+    } else { toast(url); }
+  });
+  act.appendChild(link);
+
   qrDlg.showModal();
 }
+
+/* Открыть паспорт дерева по ссылке вида ...#tree42 — то, что даёт QR */
+function openFromHash(){
+  var m = /^#tree(\d+)$/.exec(location.hash || '');
+  if(!m) return;
+  var id = parseInt(m[1], 10);
+  var t = null;
+  for(var i = 0; i < mine.length; i++) if(mine[i].id === id) t = mine[i];
+  if(!t){ toast('Дерево №' + id + ' в базе не найдено'); return; }
+  map.setView([t.lat, t.lon], 18);
+  openPassport(t);
+}
+window.addEventListener('hashchange', openFromHash);
 
 function drawQR(canvas, text){
   var cx = canvas.getContext('2d');
@@ -1592,8 +2574,8 @@ document.getElementById('exportCsv').addEventListener('click', function(){
   download('pavlodar-trees.csv', '﻿'+rows.map(function(r){return r.join(';');}).join('\n'), 'text/csv');
 });
 document.getElementById('clearMine').addEventListener('click', function(){
-  if(!mine.length) return;
-  mine = []; persist(); drawMine(); toast('Очищено');
+  loadTrees();
+  toast('Обновляю из базы…');
 });
 
 /* ================= Интерфейс ================= */
@@ -1626,15 +2608,79 @@ document.getElementById('locate').addEventListener('click', function(){
 document.getElementById('sheetHead').addEventListener('click', function(){
   document.getElementById('sheet').classList.toggle('collapsed');
 });
-Array.prototype.forEach.call(document.querySelectorAll('.tab'), function(t){
-  t.addEventListener('click', function(){
-    Array.prototype.forEach.call(document.querySelectorAll('.tab'), function(x){
-      x.classList.toggle('active', x === t);
-    });
-    ['green','ndvi','deficit','mine','ai','species'].forEach(function(n){
-      document.getElementById('tab-'+n).hidden = (n !== t.dataset.tab);
-    });
+/* ---- Три режима работы ---- */
+var ALL_TABS = ['green','ndvi','trend','climate','deficit','mine','water','rating','report','species'];
+var MODES = {
+  analyze: {
+    name: 'Анализ',
+    hint: 'Где в городе не хватает зелени и как это менялось.',
+    tabs: [['green','Зелень'], ['ndvi','Спутник'], ['deficit','Дефицит'],
+           ['trend','Динамика'], ['climate','Климат']]
+  },
+  plan: {
+    name: 'План',
+    hint: 'Что сажать, во что обойдётся и что это даст городу.',
+    tabs: [['report','Заключение'], ['species','Породы']]
+  },
+  field: {
+    name: 'Поле',
+    hint: 'Деревья в общей базе, полив по погоде, шефство школ.',
+    tabs: [['mine','Деревья'], ['water','Полив'], ['rating','Рейтинг']]
+  }
+};
+var curMode = 'analyze', curTab = 'green';
+
+function showTab(name){
+  curTab = name;
+  ALL_TABS.forEach(function(n){
+    var el = document.getElementById('tab-' + n);
+    if(el) el.hidden = (n !== name);
   });
+  Array.prototype.forEach.call(document.querySelectorAll('#tabs .tab'), function(b){
+    b.classList.toggle('active', b.dataset.tab === name);
+  });
+}
+
+function showMode(key){
+  curMode = key;
+  var m = MODES[key];
+  Array.prototype.forEach.call(document.querySelectorAll('#modes button'), function(b){
+    b.setAttribute('aria-pressed', String(b.dataset.mode === key));
+  });
+  document.getElementById('modeHint').textContent = m.hint;
+  document.getElementById('sheetSub').textContent = m.name;
+
+  var box = document.getElementById('tabs');
+  box.innerHTML = '';
+  m.tabs.forEach(function(pair){
+    var b = document.createElement('button');
+    b.className = 'tab';
+    b.dataset.tab = pair[0];
+    b.textContent = pair[1];
+    box.appendChild(b);
+  });
+  showTab(m.tabs[0][0]);
+}
+
+document.getElementById('modes').addEventListener('click', function(e){
+  var b = e.target.closest('button[data-mode]');
+  if(b) showMode(b.dataset.mode);
+});
+document.getElementById('tabs').addEventListener('click', function(e){
+  var b = e.target.closest('.tab');
+  if(b) showTab(b.dataset.tab);
+});
+
+/* ---- Ассистент в своей панели ---- */
+var aiDlg = document.getElementById('aiDlg');
+document.getElementById('aiClose').addEventListener('click', function(){ aiDlg.close(); });
+aiDlg.addEventListener('click', function(e){ if(e.target === aiDlg) aiDlg.close(); });
+document.getElementById('aiFab').addEventListener('click', function(){
+  aiDlg.showModal();
+  setTimeout(function(){
+    var log = document.getElementById('chatLog');
+    if(log) log.scrollTop = log.scrollHeight;
+  }, 50);
 });
 
 function setStats(id, pairs){
@@ -1671,7 +2717,8 @@ SPECIES.slice(0,10).forEach(function(s){
 });
 
 loadBtn.addEventListener('click', loadData);
-drawMine();
+showMode('analyze');
+loadTrees();
 })();
 </script>
 </body>
