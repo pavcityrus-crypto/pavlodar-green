@@ -11,6 +11,7 @@
     --bg:#f4f6f3; --surface:#ffffff; --fg:#1b2420; --muted:#657068;
     --line:#dfe5df; --accent:#2f7d4f; --accent-soft:#e6f1e9;
     --warn:#c98a16; --crit:#c0392b; --ok:#2f7d4f;
+    --gain:#2f7d4f; --loss:#9b3b8f;
     --shadow:0 2px 14px rgba(20,40,28,.14);
     color-scheme:light;
   }
@@ -19,6 +20,7 @@
       --bg:#121714; --surface:#1b211d; --fg:#e8eee9; --muted:#9aa89f;
       --line:#2b332d; --accent:#6fc08b; --accent-soft:#223129;
       --warn:#e0a93c; --crit:#e07a6d;
+      --gain:#4da56f; --loss:#b96bab;
       --shadow:0 2px 16px rgba(0,0,0,.55);
       color-scheme:dark;
     }
@@ -359,6 +361,39 @@
       <p class="note" id="trendnote">Снимает по одному летнему кадру Sentinel-2 за каждый год
         с 2017-го и считает долю густой зелени. Десять запросов подряд, займёт около минуты.
         Участок берётся тот, что сейчас на экране.</p>
+    </div>
+
+    <div id="tab-districts" hidden>
+      <div class="stats" id="distStats">
+        <div class="stat"><b>—</b><span>районов найдено</span></div>
+        <div class="stat"><b>—</b><span>зелень выросла</span></div>
+        <div class="stat"><b>—</b><span>зелень ушла</span></div>
+        <div class="stat"><b>—</b><span>без изменений</span></div>
+      </div>
+      <label for="distYears" style="margin-top:0">Глубина разбора</label>
+      <select id="distYears">
+        <option value="fast">Быстро — 2017, 2020, 2023, 2026 (4 кадра на район)</option>
+        <option value="full">Подробно — каждый год с 2017 (10 кадров на район)</option>
+      </select>
+      <div class="row" style="margin-top:10px">
+        <button class="btn" id="distFind">1. Найти районы</button>
+        <button class="btn primary" id="distRun" disabled>2. Прогнать по годам</button>
+        <button class="btn" id="distCsv" hidden>CSV</button>
+      </div>
+
+      <figure class="chart-fig" id="distFig" hidden>
+        <figcaption>Изменение доли густой зелени, процентных пунктов</figcaption>
+        <div class="chart-host"><svg id="distChart" viewBox="0 0 560 320" role="img"
+          aria-label="Изменение доли зелени по районам Павлодара"></svg></div>
+      </figure>
+
+      <table><thead><tr><th>Район</th><th class="num">Было</th><th class="num">Стало</th><th class="num">Δ</th></tr></thead>
+        <tbody id="distList"><tr><td colspan="4" style="color:var(--muted);border:none">
+          Нажмите «Найти районы» — система возьмёт кварталы и микрорайоны Павлодара
+          из OpenStreetMap, потом снимет по каждому спутник за выбранные годы.</td></tr></tbody></table>
+      <p class="note" id="distNote">По каждому району берётся квадрат примерно 1,8 км вокруг его центра.
+        Это выборка, а не вся площадь района — но она одинаковая для всех, поэтому районы
+        сравнимы между собой.</p>
     </div>
 
     <div id="tab-climate" hidden>
@@ -1420,6 +1455,229 @@ function drawTrendChart(data){
 }
 
 document.getElementById('trendRun').addEventListener('click', runTrend);
+
+/* ================= Разбор по районам города ================= */
+var districts = [];          /* [{name, lat, lon, years:[{year,dense,mean}]}] */
+var distLayer = L.layerGroup().addTo(map);
+var DIST_BOX = 0.009;        /* ~1 км по широте в каждую сторону -> квадрат ~1,8 км */
+
+function findDistricts(){
+  var btn = document.getElementById('distFind');
+  btn.disabled = true; btn.textContent = 'Ищу…';
+  var q = '[out:json][timeout:40];(' +
+    'node["place"~"^(suburb|neighbourhood|quarter|borough)$"](52.20,76.82,52.40,77.12);' +
+    ');out tags center 60;';
+
+  fetchOverpass(q).then(function(d){
+    var seen = {};
+    districts = (d.elements || [])
+      .filter(function(e){
+        var n = e.tags && (e.tags['name:ru'] || e.tags.name);
+        if(!n || seen[n]) return false;
+        seen[n] = 1;
+        return true;
+      })
+      .map(function(e){
+        return {name: e.tags['name:ru'] || e.tags.name, lat: e.lat, lon: e.lon, years: []};
+      });
+
+    if(!districts.length){
+      document.getElementById('distNote').textContent =
+        'В OpenStreetMap для Павлодара не размечены микрорайоны. ' +
+        'Наведите карту на нужный участок и пользуйтесь вкладкой «Динамика».';
+      btn.disabled = false; btn.textContent = '1. Найти районы';
+      return;
+    }
+
+    drawDistricts();
+    setStats('distStats', [[districts.length, 'районов найдено'], ['—','зелень выросла'],
+                           ['—','зелень ушла'], ['—','без изменений']]);
+    var tb = document.getElementById('distList');
+    tb.innerHTML = '';
+    districts.forEach(function(d2){
+      var tr = document.createElement('tr');
+      tr.innerHTML = '<td>' + escapeHtml(d2.name) + '</td><td class="num">—</td>' +
+                     '<td class="num">—</td><td class="num">—</td>';
+      tb.appendChild(tr);
+    });
+    document.getElementById('distNote').textContent =
+      'Найдено ' + districts.length + ' районов. Теперь нажмите «Прогнать по годам» — ' +
+      'это ' + districts.length + ' участков на спутнике, займёт несколько минут.';
+    btn.disabled = false; btn.textContent = 'Искать заново';
+    document.getElementById('distRun').disabled = false;
+    toast('Районов: ' + districts.length);
+  }).catch(function(err){
+    btn.disabled = false; btn.textContent = '1. Найти районы';
+    document.getElementById('distNote').textContent = 'Не удалось получить список: ' + err.message;
+  });
+}
+
+function drawDistricts(){
+  distLayer.clearLayers();
+  districts.forEach(function(d){
+    var col = d.delta === undefined ? '#657068'
+            : d.delta > 1 ? '#2f7d4f'
+            : d.delta < -1 ? '#9b3b8f' : '#657068';
+    L.rectangle([[d.lat - DIST_BOX, d.lon - DIST_BOX * 1.63],
+                 [d.lat + DIST_BOX, d.lon + DIST_BOX * 1.63]],
+      {color: col, weight: 1.5, fillColor: col,
+       fillOpacity: d.delta === undefined ? 0.06 : 0.18})
+      .bindPopup('<b>' + escapeHtml(d.name) + '</b>' +
+        (d.years && d.years.length
+          ? 'Зелень: ' + Math.round(d.years[0].dense * 100) + '% в ' + d.years[0].year +
+            ' → ' + Math.round(d.years[d.years.length-1].dense * 100) + '% в ' +
+            d.years[d.years.length-1].year +
+            '<br><b>' + (d.delta >= 0 ? '+' : '') + d.delta.toFixed(1) + ' п.п.</b>'
+          : 'Ещё не измерен'))
+      .addTo(distLayer);
+  });
+}
+
+var distBusy = false;
+function runDistricts(){
+  if(distBusy || !districts.length) return;
+  if(!creds()){ openKeys(); return; }
+
+  var years = document.getElementById('distYears').value === 'full'
+    ? [2017,2018,2019,2020,2021,2022,2023,2024,2025,2026]
+    : [2017,2020,2023,2026];
+
+  var btn = document.getElementById('distRun');
+  distBusy = true; btn.disabled = true;
+  var total = districts.length * years.length, done = 0;
+
+  function one(di, yi){
+    if(di >= districts.length){
+      distBusy = false;
+      btn.disabled = false; btn.textContent = 'Прогнать заново';
+      setProgress(-1);
+      finishDistricts();
+      return;
+    }
+    var d = districts[di];
+    if(yi === 0) d.years = [];
+    if(yi >= years.length){ one(di + 1, 0); return; }
+
+    var b = L.latLngBounds(
+      [d.lat - DIST_BOX, d.lon - DIST_BOX * 1.63],
+      [d.lat + DIST_BOX, d.lon + DIST_BOX * 1.63]);
+
+    btn.textContent = (di + 1) + '/' + districts.length;
+    setProgress(Math.round(100 * done / total),
+      d.name + ', ' + years[yi] + ' год — осталось кадров: ' + (total - done));
+
+    measureYear(years[yi], b).then(function(res){
+      if(res) d.years.push({year: years[yi], dense: res.dense, mean: res.mean});
+      done++;
+      one(di, yi + 1);
+    });
+  }
+  one(0, 0);
+}
+
+function finishDistricts(){
+  var ok = districts.filter(function(d){ return d.years.length >= 2; });
+  ok.forEach(function(d){
+    d.years.sort(function(a, b){ return a.year - b.year; });
+    d.delta = (d.years[d.years.length-1].dense - d.years[0].dense) * 100;
+  });
+  ok.sort(function(a, b){ return b.delta - a.delta; });
+
+  var up = ok.filter(function(d){ return d.delta > 1; }).length;
+  var down = ok.filter(function(d){ return d.delta < -1; }).length;
+  setStats('distStats', [
+    [ok.length, 'районов измерено'],
+    [up, 'зелень выросла'],
+    [down, 'зелень ушла'],
+    [ok.length - up - down, 'без изменений']
+  ]);
+
+  var tb = document.getElementById('distList');
+  tb.innerHTML = '';
+  ok.forEach(function(d){
+    var first = d.years[0], last = d.years[d.years.length-1];
+    var sign = d.delta >= 0 ? '+' : '';
+    var col = d.delta > 1 ? 'var(--ok)' : d.delta < -1 ? 'var(--loss)' : 'var(--muted)';
+    var tr = document.createElement('tr');
+    tr.innerHTML = '<td>' + escapeHtml(d.name) +
+        '<br><span style="color:var(--muted);font-size:11.5px">' +
+        first.year + '–' + last.year + ' · кадров ' + d.years.length + '</span></td>' +
+      '<td class="num">' + Math.round(first.dense*100) + '%</td>' +
+      '<td class="num">' + Math.round(last.dense*100) + '%</td>' +
+      '<td class="num" style="color:' + col + ';font-weight:700">' + sign + d.delta.toFixed(1) + '</td>';
+    tb.appendChild(tr);
+  });
+
+  if(ok.length){
+    document.getElementById('distFig').hidden = false;
+    drawDistChart(ok);
+    var best = ok[0], worst = ok[ok.length-1];
+    document.getElementById('distNote').textContent =
+      'Сильнее всего зелень прибавилась в районе «' + best.name + '» (' +
+      (best.delta >= 0 ? '+' : '') + best.delta.toFixed(1) + ' п.п.), сильнее всего потеряна в «' +
+      worst.name + '» (' + (worst.delta >= 0 ? '+' : '') + worst.delta.toFixed(1) +
+      ' п.п.). Измерено по квадрату 1,8 км вокруг центра каждого района — ' +
+      'выборка одинаковая, поэтому районы сравнимы между собой, но это не вся их площадь. ' +
+      'Год на год не приходится: сухое лето занижает показатель.';
+  }
+  document.getElementById('distCsv').hidden = ok.length ? false : true;
+  drawDistricts();
+  toast('Готово: измерено ' + ok.length + ' районов');
+}
+
+function drawDistChart(list){
+  var svg = document.getElementById('distChart');
+  var W = 560, mL = 150, mR = 54, mT = 16, rowH = 26;
+  var H = mT + list.length * rowH + 30;
+  svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+  var pw = W - mL - mR;
+
+  var maxAbs = Math.max(2, Math.ceil(Math.max.apply(null,
+    list.map(function(d){ return Math.abs(d.delta); }))));
+  var zero = mL + pw / 2;
+  var scale = (pw / 2) / maxAbs;
+
+  var out = [];
+  /* ось нуля и подписи шкалы */
+  out.push('<line class="grid-line" x1="' + zero + '" y1="' + mT + '" x2="' + zero +
+           '" y2="' + (mT + list.length * rowH) + '" stroke-width="1.5"/>');
+  [-maxAbs, 0, maxAbs].forEach(function(v){
+    var x = zero + v * scale;
+    out.push('<text class="axis-text tabular" x="' + x.toFixed(1) + '" y="' + (H - 10) +
+             '" text-anchor="middle">' + (v > 0 ? '+' : '') + v + '</text>');
+  });
+
+  list.forEach(function(d, i){
+    var y = mT + i * rowH + rowH / 2;
+    var w = Math.abs(d.delta) * scale;
+    var x = d.delta >= 0 ? zero : zero - w;
+    var col = d.delta >= 0 ? 'var(--gain)' : 'var(--loss)';
+    /* зазор 2px от нулевой линии, скруглённый дальний край */
+    out.push('<rect x="' + (d.delta >= 0 ? x + 2 : x).toFixed(1) + '" y="' + (y - 7) +
+             '" width="' + Math.max(1, w - 2).toFixed(1) + '" height="14" rx="4" fill="' + col + '"/>');
+    out.push('<text class="axis-text" x="' + (mL - 10) + '" y="' + (y + 4) +
+             '" text-anchor="end" style="fill:var(--fg)">' + escapeHtml(cut(d.name, 20)) + '</text>');
+    var lx = d.delta >= 0 ? x + w + 8 : x - 8;
+    out.push('<text class="axis-text tabular" x="' + lx.toFixed(1) + '" y="' + (y + 4) +
+             '" text-anchor="' + (d.delta >= 0 ? 'start' : 'end') +
+             '" style="fill:var(--fg);font-weight:600">' +
+             (d.delta >= 0 ? '+' : '') + d.delta.toFixed(1) + '</text>');
+  });
+  svg.innerHTML = out.join('');
+}
+function cut(s, n){ return s.length > n ? s.slice(0, n - 1) + '…' : s; }
+
+document.getElementById('distFind').addEventListener('click', findDistricts);
+document.getElementById('distRun').addEventListener('click', runDistricts);
+document.getElementById('distCsv').addEventListener('click', function(){
+  var rows = [['rayon','god','dolya_gustoy_zeleni_proc','sredniy_ndvi']];
+  districts.forEach(function(d){
+    (d.years || []).forEach(function(y){
+      rows.push([d.name, y.year, (y.dense*100).toFixed(1), y.mean.toFixed(3)]);
+    });
+  });
+  download('pavlodar-districts.csv', '﻿' + rows.map(function(r){ return r.join(';'); }).join('\n'), 'text/csv');
+});
 
 /* ================= Климат: ветер и солнце ================= */
 var DIRS = ['С','СВ','В','ЮВ','Ю','ЮЗ','З','СЗ'];
@@ -2609,13 +2867,13 @@ document.getElementById('sheetHead').addEventListener('click', function(){
   document.getElementById('sheet').classList.toggle('collapsed');
 });
 /* ---- Три режима работы ---- */
-var ALL_TABS = ['green','ndvi','trend','climate','deficit','mine','water','rating','report','species'];
+var ALL_TABS = ['green','ndvi','trend','districts','climate','deficit','mine','water','rating','report','species'];
 var MODES = {
   analyze: {
     name: 'Анализ',
     hint: 'Где в городе не хватает зелени и как это менялось.',
     tabs: [['green','Зелень'], ['ndvi','Спутник'], ['deficit','Дефицит'],
-           ['trend','Динамика'], ['climate','Климат']]
+           ['trend','Динамика'], ['districts','Районы'], ['climate','Климат']]
   },
   plan: {
     name: 'План',
